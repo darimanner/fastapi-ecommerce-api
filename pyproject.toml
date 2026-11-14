@@ -1,0 +1,107 @@
+[project]
+name = "fastapi-ecommerce-api"
+version = "0.1.0"
+description = "E-commerce REST API built with FastAPI, SQLAlchemy and Alembic"
+authors = [{ name = "Kostiantyn Durlov", email = "konstantin_durlov.dev@protonmail.com" }]
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "alembic>=1.20.1",
+    "asyncpg>=0.32.0",
+    "fastapi[standard]>=0.159.1",
+    "pydantic-settings>=2.16.1",
+    "sqlalchemy[asyncio]>=2.1.8",
+    "structlog>=26.1.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.4,<0.14"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.1",
+    "pre-commit>=4.7.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.5.0",
+    "ruff>=0.17.1",
+    "testcontainers>=4.15.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+
+[tool.mypy]
+strict = true
+files = ["src", "tests", "migrations"]
+plugins = ["pydantic.mypy"]
+
+[tool.alembic]
+script_location = "%(here)s/migrations"
+
+[[tool.alembic.post_write_hooks]]
+name = "ruff_check"
+type = "module"
+module = "ruff"
+options = "check --fix REVISION_SCRIPT_FILENAME"
+
+[[tool.alembic.post_write_hooks]]
+name = "ruff_format"
+type = "module"
+module = "ruff"
+options = "format REVISION_SCRIPT_FILENAME"
+
+[tool.ruff]
+line-length = 90
+
+[tool.ruff.lint]
+preview = true
+explicit-preview-rules = true
+select = [
+    "E",
+    "F",
+    "B",
+    "I",
+    "UP",
+    "S",
+    "C90",
+    "N",
+    "ANN",
+    "ASYNC",
+    "T20",
+    "RUF",
+    "PTH",
+    "ERA",
+    "PGH",
+    "PL",
+    "PLR0904",
+    "PLR0914",
+    "PLR0916",
+    "PLR1702",
+]
+ignore = ["ANN401", "S104"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]
+"tests/**" = ["S101", "PLR2004"]
+"tests/conftest.py" = ["E402"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.ruff.lint.pylint]
+max-branches = 8
+max-returns = 4
+max-statements = 30
+max-public-methods = 10
+max-locals = 10
+max-nested-blocks = 3
+max-bool-expr = 3
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+force-sort-within-sections = true
+known-first-party = ["fastapi_ecommerce_api"]
