@@ -22,8 +22,8 @@ Work in progress. The v1 scope:
 | --- | --- |
 | API | FastAPI, Pydantic v2 |
 | Database | PostgreSQL, SQLAlchemy 2 (async, asyncpg), Alembic |
-| Background jobs and cache | Taskiq, Redis |
-| Observability | structlog, OpenTelemetry, Prometheus, Grafana |
+| Background jobs and cache | Taskiq, Redis (planned) |
+| Observability | structlog; OpenTelemetry, Prometheus, Grafana (planned) |
 | Tooling | uv, ruff, mypy (strict), pytest, testcontainers, Docker |
 
 ## Architecture

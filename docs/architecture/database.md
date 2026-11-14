@@ -10,8 +10,8 @@ Implemented today: `Base` with the naming convention (`core/db/model.py`), `engi
 
 ```python
 convention = {
-    "ix": "ix_%(table_name)s_%(column_0_label)s",
-    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ix": "ix_%(table_name)s_%(column_0_N_name)s",
+    "uq": "uq_%(table_name)s_%(column_0_N_name)s",
     "ck": "ck_%(table_name)s_%(constraint_name)s",
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
@@ -107,8 +107,7 @@ uv run alembic downgrade -1
 ```
 
 - Alembic is configured in `pyproject.toml` (`[tool.alembic]`), with `post_write_hooks` running `ruff check --fix` and `ruff format`, so migrations are formatted automatically
-- `timezone = UTC` in the Alembic config
-- `migrations/env.py` imports all models through the `import_all_models()` utility, which walks `src/fastapi_ecommerce_api/modules/*/models.py` and calls `importlib.import_module`. This way Alembic sees all tables without a manual list
+- Target: `migrations/env.py` imports all models through an `import_all_models()` utility, which walks `src/fastapi_ecommerce_api/modules/*/models.py` and calls `importlib.import_module`, so Alembic sees all tables without a manual list. Until the first module exists, model modules are imported in `env.py` by hand
 - Migrations run as a **separate CI/CD step**, not at app startup, otherwise several pods would try to migrate in parallel
 
 ## Pagination

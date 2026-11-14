@@ -110,4 +110,4 @@ Models live in `modules/brands/models.py`, not in a global `infrastructure/model
 - Makes it easier to extract the module into a separate service
 - Keeps feature work local
 
-`migrations/env.py` imports all models through the `import_all_models()` utility, which walks `src/fastapi_ecommerce_api/modules/*/models.py`. This way Alembic sees all tables without a manual list.
+Target: `migrations/env.py` imports all models through an `import_all_models()` utility, which walks `src/fastapi_ecommerce_api/modules/*/models.py`, so Alembic sees all tables without a manual list.

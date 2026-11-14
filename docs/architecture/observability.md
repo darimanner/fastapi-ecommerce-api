@@ -10,28 +10,7 @@ The target stack: the application exports telemetry over OTLP to an OpenTelemetr
 
 ## Logging: structlog
 
-```python
-# src/fastapi_ecommerce_api/core/observability/logging.py
-import structlog
-
-structlog.configure(
-    processors=[
-        structlog.contextvars.merge_contextvars,
-        structlog.processors.add_log_level,
-        structlog.processors.TimeStamper(fmt="iso", utc=True),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        mask_secrets_processor,  # masks password, token, secret
-        structlog.processors.JSONRenderer()
-        if not settings.logger.debug
-        else structlog.dev.ConsoleRenderer(),
-    ],
-    wrapper_class=structlog.make_filtering_bound_logger(LOG_LEVEL),
-    cache_logger_on_first_use=True,
-)
-```
-
-JSON in production, colored console in dev. All logs are structured:
+`setup_logging(level, debug=...)` in `core/observability/logging.py` configures structlog with contextvars, log level, an ISO UTC timestamp and the `mask_secrets` processor. It renders JSON by default and a colored console when `LOGGER__DEBUG=true`. Standard library loggers (uvicorn, SQLAlchemy) go through the same renderer. Code imports the shared typed logger: `from fastapi_ecommerce_api.core.observability.logging import log`. All logs are structured:
 
 ```python
 log.info("order.created", order_id=order.id, user_id=user.id, total=str(order.total))
@@ -39,25 +18,7 @@ log.info("order.created", order_id=order.id, user_id=user.id, total=str(order.to
 
 ### Request ID middleware
 
-```python
-# src/fastapi_ecommerce_api/core/observability/middleware.py
-class RequestIDMiddleware:
-    async def __call__(self, request: Request, call_next):
-        rid = request.headers.get("X-Request-ID") or str(uuid4())
-        structlog.contextvars.bind_contextvars(
-            request_id=rid,
-            path=request.url.path,
-            method=request.method,
-        )
-        try:
-            response = await call_next(request)
-            response.headers["X-Request-ID"] = rid
-            return response
-        finally:
-            structlog.contextvars.clear_contextvars()
-```
-
-After this, **every log event** during request handling automatically carries `request_id` without passing it explicitly.
+`request_context` in `core/observability/middleware.py` takes `X-Request-ID` from the request only if it matches `[A-Za-z0-9._-]{1,64}` (otherwise it generates one), binds `request_id`, `method` and `path` into structlog contextvars, returns the id in the `X-Request-ID` response header and logs `request.completed` with status and duration. After this, **every log event** during request handling automatically carries `request_id` without passing it explicitly.
 
 ### PII / Secrets Filtering
 

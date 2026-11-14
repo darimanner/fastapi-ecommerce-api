@@ -67,7 +67,7 @@ async def test_create_brand_publishes_event(fake_uow: FakeUnitOfWork) -> None:
 ```python
 @pytest.fixture(scope="session")
 def postgres_container() -> Iterator[PostgresContainer]:
-    with PostgresContainer("postgres:16-alpine") as pg:
+    with PostgresContainer("postgres:18-alpine") as pg:
         yield pg
 
 
