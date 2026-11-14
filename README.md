@@ -1,6 +1,34 @@
 # fastapi-ecommerce-api
 
-E-commerce REST API built with FastAPI, SQLAlchemy and Alembic
+[![CI](https://github.com/darimanner/fastapi-ecommerce-api/actions/workflows/ci.yml/badge.svg)](https://github.com/darimanner/fastapi-ecommerce-api/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+A production-grade e-commerce REST API built with FastAPI, SQLAlchemy and PostgreSQL. It is a reference implementation: the focus is on the parts that are easy to get wrong in real shops, such as transactional checkout, stock that never oversells under concurrency, consistent error responses and observability.
+
+## Features
+
+Work in progress. The v1 scope:
+
+- Catalog: category tree, brands, products with variants (SKU, price, stock, options)
+- Accounts: registration, JWT access and refresh tokens, role-based permissions
+- Cart and checkout with stock reservation in one transaction
+- Order lifecycle with a state machine and automatic expiry of unpaid reservations
+- Rate limiting with a sliding window in Redis
+- Observability: structured logs, traces and metrics with OpenTelemetry, Prometheus, Tempo, Loki and Grafana
+
+## Stack
+
+| Area | Tools |
+| --- | --- |
+| API | FastAPI, Pydantic v2 |
+| Database | PostgreSQL, SQLAlchemy 2 (async, asyncpg), Alembic |
+| Background jobs and cache | Taskiq, Redis |
+| Observability | structlog, OpenTelemetry, Prometheus, Grafana |
+| Tooling | uv, ruff, mypy (strict), pytest, testcontainers, Docker |
+
+## Architecture
+
+A modular monolith with a layered flow: router, service, repository, Unit of Work. See [docs/architecture.md](docs/architecture.md) and the [architecture decision records](docs/adr/README.md).
 
 ## Requirements
 
@@ -30,7 +58,7 @@ make migrate
 | `make migrate` | `alembic upgrade head`: applies all migrations |
 | `make revision m="..."` | `alembic revision --autogenerate`: new migration from model changes |
 | `make run` | `fastapi dev`: dev server with reload on http://127.0.0.1:8000 |
-| `make test` | `pytest`: tests on a throwaway PostgreSQL container |
+| `make test` | `pytest --cov`: tests on a throwaway PostgreSQL container, fails below 85% coverage |
 | `make check` | `pre-commit run --all-files`: ruff, mypy, lock check, file hygiene |
 
 ## Run
@@ -78,3 +106,11 @@ Generated from [fastapi-service-template](https://github.com/darimanner/fastapi-
 ```bash
 uvx copier update
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+[MIT](LICENSE)

@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "E-commerce REST API built with FastAPI, SQLAlchemy and Alembic"
 authors = [{ name = "Kostiantyn Durlov", email = "konstantin_durlov.dev@protonmail.com" }]
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.14"
 dependencies = [
     "alembic>=1.20.1",
