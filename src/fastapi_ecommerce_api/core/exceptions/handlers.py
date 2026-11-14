@@ -3,10 +3,12 @@ from http import HTTPStatus
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException
 import structlog
 
 from fastapi_ecommerce_api.core.exceptions.base import AppError, ValidationFailedError
+from fastapi_ecommerce_api.core.exceptions.db import map_integrity_error
 from fastapi_ecommerce_api.core.observability.logging import log
 
 
@@ -33,7 +35,16 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
         log.error("app.error", title=exc.title, detail=exc.detail, exc_info=exc)
     else:
         log.warning("app.error", title=exc.title, detail=exc.detail)
-    return problem(request, exc.status_code, exc.title, exc.detail)
+    return problem(request, exc.status_code, exc.title, exc.detail, **exc.extra)
+
+
+async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
+    error = map_integrity_error(exc)
+    if error.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR:
+        # Log the driver error here: the mapped 500 deliberately drops it.
+        log.error("db.integrity_error", exc_info=exc)
+        return problem(request, error.status_code, error.title, error.detail)
+    return await app_error_handler(request, error)
 
 
 async def http_error_handler(request: Request, exc: HTTPException) -> JSONResponse:
@@ -63,5 +74,6 @@ async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResp
 
 def register_exception_handlers(app: FastAPI) -> None:
     app.exception_handler(AppError)(app_error_handler)
+    app.exception_handler(IntegrityError)(integrity_error_handler)
     app.exception_handler(HTTPException)(http_error_handler)
     app.exception_handler(RequestValidationError)(validation_error_handler)
