@@ -20,7 +20,7 @@ run:
 	uv run fastapi dev src/fastapi_ecommerce_api/main.py
 
 test:
-	uv run pytest
+	uv run pytest --cov
 
 check:
 	uv run pre-commit run --all-files
