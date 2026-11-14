@@ -30,7 +30,7 @@ Services depend on `CacheBackend`, not on Redis. This makes it possible to:
 
 ```python
 class ProductService:
-    def __init__(self, uow: AbstractUnitOfWork, cache: CacheBackend) -> None:
+    def __init__(self, uow: UnitOfWork, cache: CacheBackend) -> None:
         self._uow = uow
         self._cache = cache
 

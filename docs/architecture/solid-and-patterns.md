@@ -21,7 +21,7 @@ When a class with two responsibilities appears (`BrandServiceAndCache`), split i
 
 ### L - Liskov Substitution
 - Any implementation of `CRUDRepository[T]` can be replaced with another (`Fake`, mock) without changing the service
-- `AbstractUnitOfWork` has a fake implementation for tests
+- `UnitOfWork` has a fake implementation for tests
 - The behavior of subtypes is compatible with the contract of the base Protocol
 
 ### I - Interface Segregation
@@ -55,7 +55,7 @@ class BrandService:
 
 # good - depends on an abstraction
 class BrandService:
-    def __init__(self, uow: AbstractUnitOfWork): ...
+    def __init__(self, uow: UnitOfWork): ...
 ```
 
 DI is done through FastAPI `Depends`. In tests it is replaced with `FakeUnitOfWork`.
@@ -65,7 +65,7 @@ DI is done through FastAPI `Depends`. In tests it is replaced with `FakeUnitOfWo
 | Pattern | Where | Why |
 |---------|-------|-----|
 | Repository | `infrastructure/repository.py` | Hide DB details from the service |
-| Unit of Work | `core/db/unit_of_work.py` | Transaction boundary |
+| Unit of Work | `infrastructure/unit_of_work.py` | Transaction boundary |
 | Dependency Injection | `core/deps`, `modules/*/deps.py` | Replaceable in tests |
 | Strategy | `core/rate_limiter/strategies.py`, payment gateways | Pluggable algorithms |
 | Specification | `core/repository/spec.py` (optional) | Composable filters |

@@ -2,7 +2,7 @@
 
 > Status: partially implemented
 
-Implemented today: `Base` with the naming convention (`core/db/model.py`), `engine`, `session_factory`, `get_db` and `DbSession` (`core/db/sessions.py`), `TimestampMixin` (`core/db/mixins/timestamp.py`), and Alembic in `migrations/` configured from `pyproject.toml`. The rest (other mixins, Unit of Work, pagination) is the target design.
+Implemented: `Base` with the naming convention, sessions, `TimestampMixin`, `UUIDPrimaryKeyMixin`, the generic repository, Unit of Work, pagination and database error mapping. Planned: the soft delete, audit and versioned mixins, and the money type (decided with the catalog).
 
 ## Base & Naming Convention
 
@@ -35,6 +35,14 @@ Money is always `Decimal`, never `float`. All datetimes are timezone-aware UTC.
 ## Mixins
 
 All live in `src/fastapi_ecommerce_api/core/db/mixins/` and are applied as needed.
+
+### UUIDPrimaryKeyMixin
+
+```python
+id: Mapped[uuid.UUID]  # primary key, default=uuid.uuid7
+```
+
+UUIDv7 keys are not enumerable in public URLs and stay time-ordered, so index inserts are local and keyset pagination can order by `id`. See [ADR-0002](../adr/0002-uuid7-primary-keys.md).
 
 ### TimestampMixin
 
@@ -73,18 +81,16 @@ Optimistic locking, for rare high-contention tables (inventory, balance).
 `src/fastapi_ecommerce_api/core/db/sessions.py`:
 
 ```python
-engine = create_async_engine(
-    str(settings.database.url),
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
-)
+engine = create_async_engine(str(settings.database.url), pool_pre_ping=True)
 session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db() -> AsyncIterator[AsyncSession]:
     async with session_factory() as session:
         yield session
+
+
+DbSession = Annotated[AsyncSession, Depends(get_db)]
 ```
 
 Important:
@@ -92,11 +98,24 @@ Important:
 - `expire_on_commit=False` is critical for async, otherwise reading attributes after a commit triggers implicit IO
 - `pool_pre_ping=True` checks the connection before use (protection against closed connections)
 
+## Repository
+
+`SQLAlchemyRepository[ModelT]` in `infrastructure/repository.py` implements the `Repository[T]` Protocol from `interfaces/repository.py` for any model with `UUIDPrimaryKeyMixin`:
+
+| Method | Notes |
+|--------|-------|
+| `get(entity_id)` | `None` when missing; the service decides whether that is a 404 |
+| `add(entity)`, `update(entity, values)`, `delete(entity)` | flush immediately, so constraint errors surface inside the service call |
+| `add_many(rows)` | one `INSERT ... RETURNING` for the whole batch, never a loop of `add` |
+| `list_offset(limit, offset)`, `list_after(after, limit)` | return a `Slice`, see [Pagination](#pagination) |
+
+Module repositories subclass it, set `model`, and build filtered queries through the protected `_slice(stmt, limit)` helper.
+
 ## Unit of Work
 
-See [Layers & Flow → Unit of Work](layers-and-flow.md#unit-of-work-coredbunit_of_workpy). Services receive a UoW, not a session.
+See [Layers & Flow](layers-and-flow.md#unit-of-work). Services receive a Unit of Work, not a session.
 
-The `AbstractUnitOfWork` Protocol declares the repository attributes and the `commit/rollback` methods. The SQLAlchemy implementation opens a session in `__aenter__`, instantiates the repositories, and closes the session in `__aexit__` (with a rollback on exception).
+`UnitOfWork` in `interfaces/unit_of_work.py` declares `async with`, `commit()` and `rollback()`. `SQLAlchemyUnitOfWork` in `infrastructure/unit_of_work.py` opens a session from the injected factory on enter, calls `_init_repositories()` so subclasses can attach their repositories, and closes the session on exit, which rolls back anything not committed explicitly.
 
 ## Migrations
 
@@ -112,37 +131,30 @@ uv run alembic downgrade -1
 
 ## Pagination
 
-Two strategies in `core/pagination/`:
+List endpoints never run `count(*)`: on large tables it is a full scan on every page. Repositories fetch `limit + 1` rows and return a `Slice(items, has_next)`. See [ADR-0003](../adr/0003-pagination-without-count.md).
 
-- **Offset** - for the admin panel, small result sets (`page`, `limit`)
-- **Cursor** - for infinite scroll, the catalog (by `(created_at, id)`)
+Two strategies in `core/pagination/`, both with `limit` from 1 to 100 (default 20), used as `Annotated[OffsetParams, Query()]`:
+
+- **Offset** (`OffsetParams`, `Page[T]`): small reference tables and admin lists
+- **Cursor** (`CursorParams`, `CursorPage[T]`): large tables (products, orders); keyset on the sort key plus `id`, so deep pages cost the same as the first
 
 ```python
-class OffsetPagination(BaseModel):
-    offset: int = Field(0, ge=0)
-    limit: int = Field(20, ge=1, le=100)
-
-
-class CursorPagination(BaseModel):
-    cursor: str | None = None
-    limit: int = Field(20, ge=1, le=100)
-
-
 class Page[T](BaseModel):
     items: list[T]
-    total: int | None = None  # None for cursor
-    next_cursor: str | None = None
+    has_next: bool
+    total: int | None = None  # only where a cached exact total exists
+
+
+class CursorPage[T](BaseModel):
+    items: list[T]
+    next_cursor: str | None
 ```
 
-The base repository supports both:
+The cursor is an opaque urlsafe base64 of a JSON list of key values. `decode_cursor` rejects anything malformed with a 422.
 
-```python
-await repo.list(pagination=OffsetPagination(offset=0, limit=20))
-await repo.list(pagination=CursorPagination(cursor="...", limit=20))
-```
+`Page.from_slice(slice_, adapter)` and `CursorPage.from_slice(slice_, adapter, key)` convert the whole slice with one module-level `TypeAdapter(list[Schema])` call (`from_attributes=True`), never `model_validate` per row.
 
 ## Behavior on DB errors
 
-- `OperationalError` (lost connection) → the repository raises `ServiceUnavailableError` (503)
-- `IntegrityError` on a unique constraint → the repository raises `ConflictError` (409)
-- Transactions are rolled back automatically when exiting the UoW on any exception
+- `IntegrityError` (unique, foreign key, check, not null) is mapped centrally to 409 or 422, see [Error Handling](error-handling.md#database-errors)
+- Transactions are rolled back when the Unit of Work exits without `commit()`, including on any exception

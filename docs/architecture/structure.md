@@ -2,7 +2,7 @@
 
 > Status: partially implemented
 
-Implemented today under `src/fastapi_ecommerce_api/`: `config/settings.py`, `main.py`, `api/health.py`, `core/db/` (`model.py`, `sessions.py`, `mixins/timestamp.py`), `core/exceptions/` (`base.py`, `handlers.py`), and `core/observability/` (`logging.py`, `middleware.py`). The rest of the tree is the target layout.
+Implemented today under `src/fastapi_ecommerce_api/`: `config/settings.py`, `main.py`, `api/health.py`, `core/db/` (`model.py`, `sessions.py`, `mixins/timestamp.py`, `mixins/uuid_pk.py`), `core/exceptions/` (`base.py`, `handlers.py`, `db.py`), `core/pagination/`, `core/observability/` (`logging.py`, `middleware.py`), `interfaces/` (`repository.py`, `unit_of_work.py`) and `infrastructure/` (`repository.py`, `unit_of_work.py`). The rest of the tree is the target layout.
 
 The approach is a **modular monolith**: each domain lives in its own folder and is self-contained. This improves cohesion, makes it easier to extract a module into a separate service later, and keeps feature work local.
 
@@ -18,13 +18,14 @@ src/fastapi_ecommerce_api/
 │   ├── db/
 │   │   ├── model.py          # Base + MetaData with naming convention
 │   │   ├── sessions.py       # async_sessionmaker, get_db dependency
-│   │   ├── unit_of_work.py   # SQLAlchemyUnitOfWork
 │   │   └── mixins/
+│   │       ├── uuid_pk.py    # UUIDv7 primary key
 │   │       ├── timestamp.py
 │   │       ├── soft_delete.py
 │   │       └── audit.py
 │   ├── exceptions/
 │   │   ├── base.py           # AppError + hierarchy
+│   │   ├── db.py             # IntegrityError -> 409/422 mapping
 │   │   └── handlers.py       # FastAPI handlers (RFC 7807)
 │   ├── events/
 │   │   ├── bus.py            # In-process EventBus
@@ -37,8 +38,8 @@ src/fastapi_ecommerce_api/
 │   │   ├── passwords.py      # argon2 hash/verify
 │   │   └── headers.py        # security headers middleware
 │   ├── pagination/
-│   │   ├── offset.py         # OffsetPagination, Page[T]
-│   │   └── cursor.py         # CursorPagination
+│   │   ├── offset.py         # OffsetParams, Page[T]
+│   │   └── cursor.py         # CursorParams, CursorPage[T], cursor encoding
 │   ├── observability/
 │   │   ├── logging.py        # structlog setup
 │   │   ├── middleware.py     # request id
@@ -54,12 +55,13 @@ src/fastapi_ecommerce_api/
 │   └── health.py             # Health endpoint
 │
 ├── interfaces/               # Protocol contracts - the core's public API
-│   ├── repository.py         # ReadRepository, WriteRepository, CRUDRepository
-│   ├── unit_of_work.py       # AbstractUnitOfWork
+│   ├── repository.py         # Repository[T], Slice[T]
+│   ├── unit_of_work.py       # UnitOfWork
 │   └── cache.py              # CacheBackend
 │
 ├── infrastructure/           # Generic SQLAlchemy implementations
-│   └── repository.py         # SQLAlchemyRepository[Model]
+│   ├── repository.py         # SQLAlchemyRepository[Model]
+│   └── unit_of_work.py       # SQLAlchemyUnitOfWork
 │
 └── modules/                  # Domain modules - standalone units
     ├── auth/                 # cross-cutting (used by other modules)

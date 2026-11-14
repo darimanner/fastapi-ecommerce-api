@@ -1,6 +1,8 @@
 # Layers & Flow
 
-> Status: planned
+> Status: partially implemented
+>
+> Implemented: the generic repository and the Unit of Work. Planned: the domain modules (routers, services and module repositories) shown in the examples.
 
 ## Request flow
 
@@ -61,7 +63,7 @@ async def create_brand(
 
 ```python
 class BrandService:
-    def __init__(self, uow: AbstractUnitOfWork, events: EventBus) -> None:
+    def __init__(self, uow: UnitOfWork, events: EventBus) -> None:
         self._uow = uow
         self._events = events
 
@@ -79,50 +81,43 @@ class BrandService:
 
 **Database queries only**:
 
-- Inherits from `SQLAlchemyRepository[Model]` (CRUD out of the box)
-- Adds specific methods (`exists_by_name`, `get_with_products`)
-- Contains no business logic
+- Inherits from `SQLAlchemyRepository[Model]` (`infrastructure/repository.py`): get, add, bulk add, update, delete and both pagination styles out of the box
+- Adds specific queries (`get_by_slug`, filtered listings through `_slice`)
+- Contains no business logic, and no pre-check queries for uniqueness: the database constraint decides, and the violation is mapped to 409/422 centrally
 
 ```python
 class BrandRepository(SQLAlchemyRepository[Brand]):
     model = Brand
 
-    async def exists_by_name(self, name: str) -> bool:
-        stmt = select(exists().where(Brand.name == name))
-        return bool(await self._session.scalar(stmt))
+    async def get_by_slug(self, slug: str) -> Brand | None:
+        return await self.session.scalar(select(Brand).where(Brand.slug == slug))
 ```
 
-### Unit of Work (`core/db/unit_of_work.py`)
+### Unit of Work
 
-**Transaction boundary**:
+**Transaction boundary** (`infrastructure/unit_of_work.py`):
 
 - Groups repositories into one transaction
-- Rolls back on exception
+- Nothing persists without an explicit `commit()`; exit, early return or an exception roll back
 - The service never works with `session` directly
 
+`SQLAlchemyUnitOfWork` owns the session lifecycle. The app-level subclass attaches every module's repository in `_init_repositories()`:
+
 ```python
-class SQLAlchemyUnitOfWork:
+class AppUnitOfWork(SQLAlchemyUnitOfWork):
     brands: BrandRepository
     products: ProductRepository
-    orders: OrderRepository
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        self._session_factory = session_factory
+    def _init_repositories(self) -> None:
+        self.brands = BrandRepository(self.session)
+        self.products = ProductRepository(self.session)
+```
 
-    async def __aenter__(self) -> Self:
-        self._session = self._session_factory()
-        self.brands = BrandRepository(self._session)
-        self.products = ProductRepository(self._session)
-        self.orders = OrderRepository(self._session)
-        return self
-
-    async def __aexit__(self, exc_type: type[BaseException] | None, *_: object) -> None:
-        if exc_type is not None:
-            await self._session.rollback()
-        await self._session.close()
-
-    async def commit(self) -> None:
-        await self._session.commit()
+```python
+async with uow:
+    order = await uow.orders.add(Order(...))
+    await uow.variants.reserve(items)
+    await uow.commit()  # both writes, or neither
 ```
 
 ## Prohibitions
