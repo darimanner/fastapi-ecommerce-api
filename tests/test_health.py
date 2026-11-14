@@ -1,0 +1,31 @@
+from fastapi.testclient import TestClient
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+from fastapi_ecommerce_api.core.db.sessions import get_db
+from fastapi_ecommerce_api.main import app
+
+
+def test_live() -> None:
+    response = TestClient(app).get("/health/live")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+async def test_ready_checks_database(client: AsyncClient) -> None:
+    response = await client.get("/health/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_ready_reports_unreachable_database() -> None:
+    engine = create_async_engine("postgresql+asyncpg://x:x@127.0.0.1:1/x")
+    app.dependency_overrides[get_db] = lambda: AsyncSession(engine)
+    try:
+        response = TestClient(app).get("/health/ready")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 503

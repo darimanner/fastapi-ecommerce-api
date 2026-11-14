@@ -1,0 +1,116 @@
+# fastapi-ecommerce-api
+
+[![CI](https://github.com/darimanner/fastapi-ecommerce-api/actions/workflows/ci.yml/badge.svg)](https://github.com/darimanner/fastapi-ecommerce-api/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+A production-grade e-commerce REST API built with FastAPI, SQLAlchemy and PostgreSQL. It is a reference implementation: the focus is on the parts that are easy to get wrong in real shops, such as transactional checkout, stock that never oversells under concurrency, consistent error responses and observability.
+
+## Features
+
+Work in progress. The v1 scope:
+
+- Catalog: category tree, brands, products with variants (SKU, price, stock, options)
+- Accounts: registration, JWT access and refresh tokens, role-based permissions
+- Cart and checkout with stock reservation in one transaction
+- Order lifecycle with a state machine and automatic expiry of unpaid reservations
+- Rate limiting with a sliding window in Redis
+- Observability: structured logs, traces and metrics with OpenTelemetry, Prometheus, Tempo, Loki and Grafana
+
+## Stack
+
+| Area | Tools |
+| --- | --- |
+| API | FastAPI, Pydantic v2 |
+| Database | PostgreSQL, SQLAlchemy 2 (async, asyncpg), Alembic |
+| Background jobs and cache | Taskiq, Redis (planned) |
+| Observability | structlog; OpenTelemetry, Prometheus, Grafana (planned) |
+| Tooling | uv, ruff, mypy (strict), pytest, testcontainers, Docker |
+
+## Architecture
+
+A modular monolith with a layered flow: router, service, repository, Unit of Work. See [docs/architecture.md](docs/architecture.md) and the [architecture decision records](docs/adr/README.md).
+
+## Requirements
+
+- Python 3.14
+- [uv](https://docs.astral.sh/uv/)
+- Docker
+- make
+
+## Setup
+
+```bash
+make install
+cp .env.example .env
+make up
+make migrate
+```
+
+`make install` sets up the git hooks, so run it inside a git repository.
+
+## Make targets
+
+| Target | What it runs |
+| --- | --- |
+| `make install` | `uv sync` and `pre-commit install`: dependencies and git hooks |
+| `make up` | `docker compose up -d --wait`: starts PostgreSQL and waits until it is healthy |
+| `make down` | `docker compose down`: stops PostgreSQL, the data volume stays |
+| `make migrate` | `alembic upgrade head`: applies all migrations |
+| `make revision m="..."` | `alembic revision --autogenerate`: new migration from model changes |
+| `make run` | `fastapi dev`: dev server with reload on http://127.0.0.1:8000 |
+| `make test` | `pytest --cov`: tests on a throwaway PostgreSQL container, fails below 85% coverage |
+| `make check` | `pre-commit run --all-files`: ruff, mypy, lock check, file hygiene |
+
+## Run
+
+```bash
+make run
+```
+
+Health checks are served at http://127.0.0.1:8000/health/live and http://127.0.0.1:8000/health/ready (pings the database).
+
+## Checks
+
+The tests start PostgreSQL in a container, so Docker must be running. They build the schema with the migrations and fail if the models have changes no migration covers.
+
+```bash
+make check   # pre-commit hooks: ruff, mypy, lock check
+make test
+```
+
+## Migrations
+
+Import new model modules in `migrations/env.py`, then:
+
+```bash
+make revision m="add items"
+make migrate
+```
+
+New revision files are formatted with ruff automatically.
+
+## Docker image
+
+```bash
+docker build -t fastapi-ecommerce-api .
+docker run --rm -e DATABASE__URL=... fastapi-ecommerce-api alembic upgrade head
+docker run -p 8000:8000 -e DATABASE__URL=... fastapi-ecommerce-api
+```
+
+The image runs as a non-root user and does not migrate on startup: run migrations as a separate deploy step.
+
+## Template updates
+
+Generated from [fastapi-service-template](https://github.com/darimanner/fastapi-service-template). Pull template changes with:
+
+```bash
+uvx copier update
+```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+[MIT](LICENSE)
