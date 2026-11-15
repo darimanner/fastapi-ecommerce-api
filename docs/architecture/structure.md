@@ -2,7 +2,7 @@
 
 > Status: partially implemented
 
-Implemented today under `src/fastapi_ecommerce_api/`: `config/settings.py`, `main.py`, `api/health.py`, `core/db/` (`model.py`, `sessions.py`, `mixins/timestamp.py`, `mixins/uuid_pk.py`), `core/exceptions/` (`base.py`, `handlers.py`, `db.py`), `core/pagination/`, `core/observability/` (`logging.py`, `middleware.py`), `interfaces/` (`repository.py`, `unit_of_work.py`) and `infrastructure/` (`repository.py`, `unit_of_work.py`). The rest of the tree is the target layout.
+Implemented today under `src/fastapi_ecommerce_api/`: `config/settings.py`, `main.py`, `api/health.py`, `core/db/` (`model.py`, `sessions.py`, `mixins/timestamp.py`, `mixins/uuid_pk.py`), `core/exceptions/` (`base.py`, `handlers.py`, `db.py`), `core/pagination/`, `core/observability/` (`logging.py`, `middleware.py`), `core/crud.py`, `core/slug.py`, `interfaces/` (`repository.py`, `unit_of_work.py`), `infrastructure/` (`repository.py`, `unit_of_work.py`), `uow.py`, and the `brands` and `categories` modules. The rest of the tree is the target layout.
 
 The approach is a **modular monolith**: each domain lives in its own folder and is self-contained. This improves cohesion, makes it easier to extract a module into a separate service later, and keeps feature work local.
 
@@ -13,6 +13,7 @@ src/fastapi_ecommerce_api/
 ├── config/
 │   └── settings.py           # pydantic-settings: Settings root + sub-models
 ├── main.py                   # FastAPI app factory (create_app), middleware, lifespan
+├── uow.py                    # AppUnitOfWork: composition root of module repositories
 │
 ├── core/                     # Framework code - reused as is
 │   ├── db/
@@ -37,6 +38,8 @@ src/fastapi_ecommerce_api/
 │   │   ├── jwt.py            # encode/decode tokens
 │   │   ├── passwords.py      # argon2 hash/verify
 │   │   └── headers.py        # security headers middleware
+│   ├── crud.py               # CRUDService[Model, Create, Update]
+│   ├── slug.py               # slugify, Slug/Name types, name+slug create schema
 │   ├── pagination/
 │   │   ├── offset.py         # OffsetParams, Page[T]
 │   │   └── cursor.py         # CursorParams, CursorPage[T], cursor encoding
@@ -73,7 +76,7 @@ src/fastapi_ecommerce_api/
 
 ## Module template
 
-Every module repeats the same structure:
+A module holds only the files it needs. `brands` is model, schemas, repository and router, with CRUD from `CRUDService`; `categories` adds `service.py` and `exceptions.py` for the tree rules. The full set of files a module may have:
 
 ```
 modules/{name}/
@@ -112,4 +115,6 @@ Models live in `modules/brands/models.py`, not in a global `infrastructure/model
 - Makes it easier to extract the module into a separate service
 - Keeps feature work local
 
-Target: `migrations/env.py` imports all models through an `import_all_models()` utility, which walks `src/fastapi_ecommerce_api/modules/*/models.py`, so Alembic sees all tables without a manual list.
+`migrations/env.py` calls `import_all_models()` (`modules/__init__.py`), which imports every `modules/*/models.py`, so Alembic sees all tables without a manual list.
+
+Adding a module means: the folder, its repository in `AppUnitOfWork` (`uow.py`), its routers in `create_app()` (`main.py`), and a migration.

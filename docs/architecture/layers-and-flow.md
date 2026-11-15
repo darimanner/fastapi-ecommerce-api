@@ -2,7 +2,7 @@
 
 > Status: partially implemented
 >
-> Implemented: the generic repository and the Unit of Work. Planned: the domain modules (routers, services and module repositories) shown in the examples.
+> Implemented: the generic repository, the Unit of Work, `CRUDService`, and the `brands` and `categories` modules. Planned: domain events published from services.
 
 ## Request flow
 
@@ -43,13 +43,19 @@ HTTP Response
 - No business logic, no SQL, no `if-else` about domain rules
 
 ```python
-@router.post("/", response_model=BrandRead, status_code=201)
-async def create_brand(
-    payload: BrandCreate,
-    service: BrandService = Depends(get_brand_service),
-) -> Brand:
+def get_service(uow: UoW) -> BrandService:
+    return CRUDService(uow, lambda: uow.brands)
+
+
+Service = Annotated[BrandService, Depends(get_service)]
+
+
+@admin_router.post("", response_model=BrandRead, status_code=201)
+async def create_brand(service: Service, payload: BrandCreate) -> Brand:
     return await service.create(payload)
 ```
+
+Each module has a public `router` (`/api/v1/brands`) and an `admin_router` (`/api/v1/admin/brands`) for writes. Admin routes are open until the auth module adds permission checks.
 
 ### Service (`modules/{m}/service.py`)
 
@@ -58,24 +64,23 @@ async def create_brand(
 - Applies domain rules
 - Orchestrates one or more repositories through the UoW
 - Raises domain exceptions
-- Publishes domain events
+- Publishes domain events (planned)
 - **Depends only on Protocol abstractions** (UoW, Cache), not on SQLAlchemy
 
-```python
-class BrandService:
-    def __init__(self, uow: UnitOfWork, events: EventBus) -> None:
-        self._uow = uow
-        self._events = events
+Standard CRUD needs no service class of its own: `core/crud.py::CRUDService[Model, Create, Update]` gives `get`, `list_offset`, `create`, `replace` (PUT), `update` (PATCH, only the fields sent) and `delete`, each in one transaction. A module writes a service only when it has rules, and puts them in the `_before_write` hook, which runs inside the write transaction:
 
-    async def create(self, data: BrandCreate) -> Brand:
-        async with self._uow:
-            if await self._uow.brands.exists_by_name(data.name):
-                raise BrandAlreadyExistsError(data.name)
-            brand = await self._uow.brands.create(data.model_dump())
-            await self._uow.commit()
-        await self._events.publish(BrandCreated(brand_id=brand.id))
-        return brand
+```python
+class CategoryUnitOfWork(UnitOfWork, Protocol):
+    categories: CategoryRepository
+
+
+class CategoryService(CRUDService[Category, CategoryCreate, CategoryUpdate]):
+    async def _before_write(
+        self, entity: Category | None, values: dict[str, Any]
+    ) -> None: ...  # cycle and depth checks on parent_id, under a tree lock
 ```
+
+The service declares the slice of the Unit of Work it needs as a Protocol, so it does not import the app-level UoW.
 
 ### Repository (`modules/{m}/repository.py`)
 
@@ -101,16 +106,16 @@ class BrandRepository(SQLAlchemyRepository[Brand]):
 - Nothing persists without an explicit `commit()`; exit, early return or an exception roll back
 - The service never works with `session` directly
 
-`SQLAlchemyUnitOfWork` owns the session lifecycle. The app-level subclass attaches every module's repository in `_init_repositories()`:
+`SQLAlchemyUnitOfWork` owns the session lifecycle. The app-level subclass in `src/fastapi_ecommerce_api/uow.py` (the composition root, so `core/` stays module-agnostic) attaches every module's repository in `_init_repositories()`, and routers get it through the `UoW` dependency:
 
 ```python
 class AppUnitOfWork(SQLAlchemyUnitOfWork):
     brands: BrandRepository
-    products: ProductRepository
+    categories: CategoryRepository
 
     def _init_repositories(self) -> None:
         self.brands = BrandRepository(self.session)
-        self.products = ProductRepository(self.session)
+        self.categories = CategoryRepository(self.session)
 ```
 
 ```python

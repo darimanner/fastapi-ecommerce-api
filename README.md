@@ -9,7 +9,7 @@ A production-grade e-commerce REST API built with FastAPI, SQLAlchemy and Postgr
 
 Work in progress. The v1 scope:
 
-- Catalog: category tree, brands, products with variants (SKU, price, stock, options)
+- Catalog: category tree with cycle and depth checks, brands (done); products with variants (SKU, price, stock, options)
 - Accounts: registration, JWT access and refresh tokens, role-based permissions
 - Cart and checkout with stock reservation in one transaction
 - Order lifecycle with a state machine and automatic expiry of unpaid reservations

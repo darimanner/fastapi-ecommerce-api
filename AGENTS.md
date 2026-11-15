@@ -24,8 +24,11 @@ Change dependencies only with `uv add` / `uv remove`; never edit `uv.lock` by ha
 - `interfaces/`: Protocols (`Repository`, `UnitOfWork`); stdlib and Pydantic only
 - `infrastructure/`: generic SQLAlchemy implementations (`SQLAlchemyRepository`, `SQLAlchemyUnitOfWork`)
 - `modules/<domain>/`: one folder per domain; modules do not import each other (except `auth` dependencies)
+- `uow.py`: `AppUnitOfWork`, the composition root that attaches every module's repository; routers get it through the `UoW` dependency
 
-A module stays thin: model, schemas, an explicit router, plus a service, `exceptions.py` or `events.py` only when it has real logic. No empty files. Standard CRUD comes from the generic bases.
+A module stays thin: model, schemas, repository, an explicit router, plus a service, `exceptions.py` or `events.py` only when it has real logic. No empty files. Standard CRUD comes from `core/crud.py::CRUDService`; domain rules go in its `_before_write` hook. A service that needs more than the generic repository declares a UoW Protocol with just its repositories (see `modules/categories/service.py`).
+
+New module checklist: folder, repository in `AppUnitOfWork`, routers in `create_app()` (`main.py`), `make revision`. Reads go on `router` (`/api/v1/<name>`), writes on `admin_router` (`/api/v1/admin/<name>`); admin routes stay open until the auth module lands.
 
 ## Conventions
 

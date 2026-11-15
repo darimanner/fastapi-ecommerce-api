@@ -2,7 +2,7 @@
 
 > Status: partially implemented
 >
-> Exists today: pytest-asyncio, httpx `AsyncClient`, testcontainers PostgreSQL, schema built by Alembic migrations plus `alembic check`, per-test transaction rollback, `make test` (`pytest --cov`, 85% gate), and CI via `.github/workflows/ci.yml`.
+> Exists today: pytest-asyncio, httpx `AsyncClient`, testcontainers PostgreSQL, schema built by Alembic migrations plus `alembic check`, per-test transaction rollback, `make test` (`pytest --cov`, 85% gate), and CI via `.github/workflows/ci.yml`. Module tests live in `tests/modules/` and go through HTTP; the `client` fixture swaps both `get_db` and `get_uow` for sessions on the test transaction. The category tree rules have SQL in them, so they are tested against Postgres, including a race of two concurrent moves on real commits. Planned: `FakeUnitOfWork` unit tests for services whose rules need no SQL (orders), polyfactory factories.
 
 ## Structure
 
