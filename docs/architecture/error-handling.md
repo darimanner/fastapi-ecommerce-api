@@ -1,162 +1,129 @@
 # Error Handling
 
 > Status: partially implemented
-
-Implemented today: `AppError`, `NotFoundError`, `ConflictError`, `ValidationFailedError` and `ServiceUnavailableError` in `core/exceptions/base.py`, and RFC 7807 `application/problem+json` handlers in `core/exceptions/handlers.py` (with `request_id` and `errors[]` for validation failures). The rest of this document is the target design.
+>
+> Implemented: the exception hierarchy, RFC 7807 handlers and database error mapping below. Planned: `UnauthorizedError`, `ForbiddenError` and `RateLimitedError`, added with auth and rate limiting.
 
 ## Principles
 
 - Services raise **domain** exceptions, not `HTTPException`
-- One global handler translates them to HTTP using the **RFC 7807 Problem Details** format
+- One set of global handlers translates them to HTTP using the **RFC 7807 Problem Details** format
 - No "magic" `Exception("smth went wrong")`
 - 5xx errors are logged with a traceback; 4xx errors are only a warning, with no alert
+- Driver messages, SQL and submitted values never reach the client
 
 ## Hierarchy
 
-```python
-# src/fastapi_ecommerce_api/core/exceptions/base.py
-class AppError(Exception):
-    """Root of all domain exceptions."""
+`core/exceptions/base.py`:
 
-    status_code: int = 500
-    error_type: str = "internal-error"
-    title: str = "Internal Server Error"
+```python
+class AppError(Exception):
+    status_code = 500
+    title = "Internal Server Error"
+
+    def __init__(self, detail: str | None = None, **extra: object) -> None:
+        self.detail = detail or self.title
+        self.extra = extra
+        super().__init__(self.detail)
 
 
 class NotFoundError(AppError):
     status_code = 404
-    error_type = "not-found"
-    title = "Resource not found"
+    title = "Not Found"
 
 
 class ConflictError(AppError):
     status_code = 409
-    error_type = "conflict"
     title = "Conflict"
 
 
 class ValidationFailedError(AppError):
     status_code = 422
-    error_type = "validation-error"
-    title = "Validation failed"
+    title = "Validation Error"
 
 
-class UnauthorizedError(AppError):
-    status_code = 401
-    error_type = "unauthorized"
-    title = "Authentication required"
-
-
-class ForbiddenError(AppError):
-    status_code = 403
-    error_type = "forbidden"
-    title = "Forbidden"
-
-
-class RateLimitedError(AppError):
-    status_code = 429
-    error_type = "rate-limited"
-    title = "Too many requests"
+class ServiceUnavailableError(AppError):
+    status_code = 503
+    title = "Service Unavailable"
 ```
 
-Concrete modules inherit from these:
+Modules inherit from these and only set the detail:
 
 ```python
 # src/fastapi_ecommerce_api/modules/brands/exceptions.py
 class BrandNotFoundError(NotFoundError):
-    title = "Brand not found"
-
-    def __init__(self, brand_id: int) -> None:
+    def __init__(self, brand_id: UUID) -> None:
         super().__init__(f"Brand {brand_id} does not exist")
-        self.brand_id = brand_id
-
-
-class BrandAlreadyExistsError(ConflictError):
-    title = "Brand already exists"
-
-    def __init__(self, name: str) -> None:
-        super().__init__(f"Brand with name '{name}' already exists")
-        self.name = name
 ```
 
 ## RFC 7807 Problem Details
 
-All HTTP errors share a single format with the media type `application/problem+json`:
+All HTTP errors share one format with the media type `application/problem+json`. `type` is derived from `title` (`"Not Found"` becomes `"not-found"`):
 
 ```json
 {
-  "type": "https://api.example.com/errors/not-found",
-  "title": "Brand not found",
+  "type": "not-found",
+  "title": "Not Found",
   "status": 404,
-  "detail": "Brand 42 does not exist",
-  "instance": "/api/v1/brands/42",
+  "detail": "Brand 0193... does not exist",
+  "instance": "/api/v1/brands/0193...",
   "request_id": "5f8b1e..."
 }
 ```
 
-`request_id` is taken from the `structlog` context, which lets you link an error seen by the client to the server logs.
-
-For `ValidationFailedError` an `errors[]` field is added:
+`request_id` comes from the structlog context bound by the request middleware, which links the error a client sees to the server logs. Extension members passed as `AppError(..., errors=[...])` are added to the body; validation failures use them:
 
 ```json
 {
-  "type": "...",
-  "title": "Validation failed",
+  "type": "validation-error",
+  "title": "Validation Error",
   "status": 422,
-  "errors": [
-    {"field": "name", "message": "String should have at least 1 character"}
-  ]
+  "detail": "Validation Error",
+  "instance": "/api/v1/brands",
+  "request_id": "...",
+  "errors": [{"field": "body.name", "message": "String should have at least 1 character"}]
 }
 ```
 
-## Handler
+## Handlers
 
-```python
-# src/fastapi_ecommerce_api/core/exceptions/handlers.py
-async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
-    request_id = structlog.contextvars.get_contextvars().get("request_id")
-    log_method = log.warning if exc.status_code < 500 else log.error
-    log_method(
-        "app.exception",
-        error_type=exc.error_type,
-        detail=str(exc),
-        status=exc.status_code,
-        exc_info=exc.status_code >= 500,
-    )
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "type": f"https://api.example.com/errors/{exc.error_type}",
-            "title": exc.title,
-            "status": exc.status_code,
-            "detail": str(exc),
-            "instance": str(request.url.path),
-            "request_id": request_id,
-        },
-        media_type="application/problem+json",
-    )
+`core/exceptions/handlers.py` registers, via `register_exception_handlers(app)`:
 
+| Exception | Handler | Response |
+|-----------|---------|----------|
+| `AppError` | `app_error_handler` | its status, title, detail and extension members |
+| `IntegrityError` | `integrity_error_handler` | mapped by `map_integrity_error`, see below |
+| `HTTPException` | `http_error_handler` | its status with the standard phrase as title |
+| `RequestValidationError` | `validation_error_handler` | 422 with `errors[]` |
+| any other exception | `unexpected_error_handler` (called by the request middleware) | generic 500 |
 
-def register_exception_handlers(app: FastAPI) -> None:
-    app.add_exception_handler(AppError, app_error_handler)
-    app.add_exception_handler(RequestValidationError, validation_error_handler)
-    app.add_exception_handler(Exception, unexpected_error_handler)
-```
+## Database errors
 
-## Pydantic Validation Errors
+Services do not pre-check uniqueness or references with extra queries: the database enforces them, and `map_integrity_error` in `core/exceptions/db.py` turns the violation into a client error. It reads the asyncpg error behind SQLAlchemy's `IntegrityError` (`sqlstate`, `constraint_name`, `table_name`, `column_name`, `detail`). Field names come from the `Key (...)=` part of the detail; values are dropped.
 
-Pydantic already raises `RequestValidationError`. A custom handler converts it to the RFC 7807 format with an `errors[]` array.
+| sqlstate | Error | Response |
+|----------|-------|----------|
+| `23505` unique | `ConflictError("<field> already exists")` | 409, `errors: [{"field", "message": "already exists"}]` |
+| `23503` foreign key on delete ("is still referenced") | `ConflictError("Resource is still referenced by <table>")` | 409 |
+| `23503` foreign key on insert or update | `ValidationFailedError("Referenced <field> does not exist")` | 422, `errors: [{"field", "message": "does not exist"}]` |
+| `23514` check | `ValidationFailedError("Constraint <name> failed")`, name without the `ck_<table>_` prefix | 422 |
+| `23502` not null | `ValidationFailedError("<column> is required")` | 422 |
+| anything else | `AppError()` | generic 500; the original error is logged |
+
+The engine is created with `hide_parameters=True` unless `LOGGER__DEBUG=true`, so logged SQL errors do not carry submitted values either.
+
+Constraint names are predictable thanks to the naming convention on `Base` (see [Database](database.md)), which is what makes the check mapping readable.
 
 ## Unexpected Errors
 
-`Exception` is caught last. It is logged with a traceback, and the client gets a generic message with no internal details:
+Any other exception is logged with a traceback, and the client gets a generic body with no internal details:
 
 ```json
 {
-  "type": "https://api.example.com/errors/internal-error",
+  "type": "internal-server-error",
   "title": "Internal Server Error",
   "status": 500,
-  "detail": "An unexpected error occurred",
+  "detail": "Internal Server Error",
   "instance": "/api/v1/...",
   "request_id": "..."
 }
@@ -164,7 +131,7 @@ Pydantic already raises `RequestValidationError`. A custom handler converts it t
 
 ## Prohibitions
 
-- Routers **must not** catch and re-wrap exceptions: that is the handler's job
+- Routers **must not** catch and re-wrap exceptions: that is the handlers' job
 - Services **must not** raise `HTTPException` directly
 - `pass` inside `except` is a code smell: it catches everything and ignores it. Only do it deliberately, with a log
-- Catching a top-level `Exception` anywhere other than `unexpected_error_handler` is not allowed
+- Catching a top-level `Exception` anywhere other than the request middleware is not allowed

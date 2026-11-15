@@ -2,8 +2,9 @@ class AppError(Exception):
     status_code = 500
     title = "Internal Server Error"
 
-    def __init__(self, detail: str | None = None) -> None:
+    def __init__(self, detail: str | None = None, **extra: object) -> None:
         self.detail = detail or self.title
+        self.extra = extra
         super().__init__(self.detail)
 
 
