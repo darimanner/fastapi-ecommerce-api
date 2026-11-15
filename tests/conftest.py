@@ -11,11 +11,17 @@ from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
 import pytest
 from sqlalchemy import Connection
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from testcontainers.community.postgres import PostgresContainer
 
 from fastapi_ecommerce_api.core.db.sessions import get_db
 from fastapi_ecommerce_api.main import app
+from fastapi_ecommerce_api.uow import AppUnitOfWork, get_uow
 
 
 def migrate(connection: Connection) -> None:
@@ -41,19 +47,32 @@ async def engine(postgres_url: str) -> AsyncIterator[AsyncEngine]:
 
 
 @pytest.fixture
-async def db_session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
+async def session_factory(
+    engine: AsyncEngine,
+) -> AsyncIterator[async_sessionmaker[AsyncSession]]:
+    # Sessions commit into savepoints of one outer transaction rolled back at the end.
     async with engine.connect() as conn:
         transaction = await conn.begin()
-        async with AsyncSession(
-            bind=conn, join_transaction_mode="create_savepoint"
-        ) as session:
-            yield session
+        yield async_sessionmaker(
+            bind=conn, join_transaction_mode="create_savepoint", expire_on_commit=False
+        )
         await transaction.rollback()
 
 
 @pytest.fixture
-async def client(db_session: AsyncSession) -> AsyncIterator[AsyncClient]:
+async def db_session(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> AsyncIterator[AsyncSession]:
+    async with session_factory() as session:
+        yield session
+
+
+@pytest.fixture
+async def client(
+    db_session: AsyncSession, session_factory: async_sessionmaker[AsyncSession]
+) -> AsyncIterator[AsyncClient]:
     app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[get_uow] = lambda: AppUnitOfWork(session_factory)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
     app.dependency_overrides.clear()

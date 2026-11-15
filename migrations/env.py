@@ -7,8 +7,9 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from fastapi_ecommerce_api.config.settings import settings
 from fastapi_ecommerce_api.core.db.model import Base
+from fastapi_ecommerce_api.modules import import_all_models
 
-# Import model modules above so autogenerate sees their tables in Base.metadata.
+import_all_models()
 
 logging.basicConfig(format="%(levelname)s [%(name)s] %(message)s")
 logging.getLogger("alembic").setLevel(logging.INFO)
