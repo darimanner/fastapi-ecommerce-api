@@ -12,8 +12,15 @@ Name = Annotated[
 ]
 
 
+# Letters NFKD does not decompose into ASCII; without this they would vanish.
+LATIN_EXTRAS = str.maketrans(
+    {"ß": "ss", "ł": "l", "ø": "o", "æ": "ae", "œ": "oe", "đ": "d", "þ": "th"}
+)
+
+
 def slugify(value: str) -> str:
-    ascii_value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
+    latin = value.lower().translate(LATIN_EXTRAS)
+    ascii_value = unicodedata.normalize("NFKD", latin).encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z0-9]+", "-", ascii_value.lower()).strip("-")[:120].rstrip("-")
 
 

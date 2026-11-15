@@ -35,26 +35,20 @@ A pyramid:
 
 ### Unit
 
+Planned, for services whose rules need no SQL (the order state machine):
+
 - Services are tested with `FakeUnitOfWork` and `FakeRepository` (in-memory dict)
 - No real DB, no FastAPI
 - They cover business rules and edge cases
+- Uniqueness and references are not unit-tested: the database constraints own them, so they are tested through HTTP against Postgres
 
 ```python
-async def test_create_brand_rejects_duplicates(fake_uow: FakeUnitOfWork) -> None:
-    service = BrandService(fake_uow, FakeEventBus())
+async def test_paid_order_cannot_go_back_to_pending(fake_uow: FakeUnitOfWork) -> None:
+    order = await fake_uow.orders.add(an_order(status=OrderStatus.PAID))
+    service = OrderService(fake_uow)
 
-    await service.create(BrandCreate(name="nike"))
-    with pytest.raises(BrandAlreadyExistsError):
-        await service.create(BrandCreate(name="nike"))
-
-
-async def test_create_brand_publishes_event(fake_uow: FakeUnitOfWork) -> None:
-    events = FakeEventBus()
-    service = BrandService(fake_uow, events)
-
-    brand = await service.create(BrandCreate(name="nike"))
-
-    assert events.published == [BrandCreated(brand_id=brand.id)]
+    with pytest.raises(IllegalTransitionError):
+        await service.transition(order.id, OrderStatus.PENDING)
 ```
 
 ### Integration

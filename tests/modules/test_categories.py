@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import suppress
 from typing import Any
 import uuid
@@ -6,7 +7,7 @@ import uuid
 from httpx import AsyncClient
 import pytest
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from fastapi_ecommerce_api.config.settings import settings
 from fastapi_ecommerce_api.modules.categories.exceptions import CategoryCycleError
@@ -96,6 +97,7 @@ async def test_moving_a_subtree_counts_its_height(client: AsyncClient) -> None:
     fits = await move(client, subtree_root, top)
 
     assert too_deep.status_code == 409
+    assert too_deep.json()["category_id"] == subtree_root["id"]
     assert fits.status_code == 200
 
 
@@ -128,6 +130,19 @@ async def test_unknown_parent_is_422(client: AsyncClient) -> None:
     assert response.json()["errors"][0]["field"] == "parent_id"
 
 
+async def test_unknown_parent_is_422_even_for_a_too_deep_subtree(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, *_ = await chain(client, "a", "b", "c")
+    monkeypatch.setattr(settings.catalog, "max_category_depth", 2)
+
+    response = await client.patch(
+        f"{ADMIN}/{root['id']}", json={"parent_id": str(uuid.uuid7())}
+    )
+
+    assert response.status_code == 422
+
+
 async def test_delete_with_children_is_409_and_leaf_is_204(client: AsyncClient) -> None:
     root, child = await chain(client, "Shoes", "Running")
 
@@ -154,29 +169,83 @@ class RacingService(CategoryService):
                 await self._barrier.wait()
 
 
-async def test_concurrent_cross_moves_cannot_build_a_cycle(engine: AsyncEngine) -> None:
+class StaleReadService(CategoryService):
+    """Another admin moves the node right after this request has read it."""
+
+    def __init__(
+        self, uow: AppUnitOfWork, concurrent_move: Callable[[], Awaitable[object]]
+    ) -> None:
+        super().__init__(uow, max_depth=5)
+        self._concurrent_move = concurrent_move
+
+    async def _before_write(
+        self, entity: Category | None, values: dict[str, Any]
+    ) -> None:
+        await self._concurrent_move()
+        await super()._before_write(entity, values)
+
+
+@pytest.fixture
+async def committed(engine: AsyncEngine) -> AsyncIterator[CommittedTree]:
     # Real commits on separate connections: the savepoint fixtures share one.
-    factory = async_sessionmaker(engine, expire_on_commit=False)
+    tree = CommittedTree(async_sessionmaker(engine, expire_on_commit=False))
+    yield tree
+    async with engine.begin() as conn:
+        ids = {"ids": tree.ids}
+        await conn.execute(
+            text("UPDATE categories SET parent_id = NULL WHERE id = ANY(:ids)"), ids
+        )
+        await conn.execute(text("DELETE FROM categories WHERE id = ANY(:ids)"), ids)
+
+
+class CommittedTree:
+    def __init__(self, factory: async_sessionmaker[AsyncSession]) -> None:
+        self.factory = factory
+        self.ids: list[uuid.UUID] = []
+
+    def service(self) -> CategoryService:
+        return CategoryService(AppUnitOfWork(self.factory), max_depth=5)
+
+    async def create(self, parent: Category | None = None) -> Category:
+        category = await self.service().create(
+            CategoryCreate(name=f"c-{uuid.uuid7()}", parent_id=parent and parent.id)
+        )
+        self.ids.append(category.id)
+        return category
+
+
+async def test_concurrent_cross_moves_cannot_build_a_cycle(
+    committed: CommittedTree,
+) -> None:
+    a, b = await committed.create(), await committed.create()
     barrier = asyncio.Barrier(2)
 
-    def service() -> CategoryService:
-        return RacingService(AppUnitOfWork(factory), barrier)
+    results = await asyncio.gather(
+        RacingService(AppUnitOfWork(committed.factory), barrier).update(
+            a.id, CategoryUpdate(parent_id=b.id)
+        ),
+        RacingService(AppUnitOfWork(committed.factory), barrier).update(
+            b.id, CategoryUpdate(parent_id=a.id)
+        ),
+        return_exceptions=True,
+    )
 
-    a = await service().create(CategoryCreate(name=f"a-{uuid.uuid7()}"))
-    b = await service().create(CategoryCreate(name=f"b-{uuid.uuid7()}"))
-    try:
-        results = await asyncio.gather(
-            service().update(a.id, CategoryUpdate(parent_id=b.id)),
-            service().update(b.id, CategoryUpdate(parent_id=a.id)),
-            return_exceptions=True,
-        )
-        assert sorted(type(r).__name__ for r in results) == sorted(
-            [Category.__name__, CategoryCycleError.__name__]
-        )
-    finally:
-        async with engine.begin() as conn:
-            ids = {"ids": [a.id, b.id]}
-            await conn.execute(
-                text("UPDATE categories SET parent_id = NULL WHERE id = ANY(:ids)"), ids
-            )
-            await conn.execute(text("DELETE FROM categories WHERE id = ANY(:ids)"), ids)
+    assert sorted(type(r).__name__ for r in results) == sorted(
+        [Category.__name__, CategoryCycleError.__name__]
+    )
+
+
+async def test_move_is_checked_against_the_committed_parent(
+    committed: CommittedTree,
+) -> None:
+    first, second = await committed.create(), await committed.create()
+    node = await committed.create(parent=first)
+
+    def other_admin_moves_node() -> Awaitable[Category]:
+        return committed.service().update(node.id, CategoryUpdate(parent_id=second.id))
+
+    service = StaleReadService(AppUnitOfWork(committed.factory), other_admin_moves_node)
+    moved = await service.update(node.id, CategoryUpdate(parent_id=first.id))
+    stored = await committed.service().get(node.id)
+
+    assert moved.parent_id == stored.parent_id == first.id

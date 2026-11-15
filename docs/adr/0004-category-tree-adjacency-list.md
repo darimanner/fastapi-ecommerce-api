@@ -11,11 +11,12 @@ Categories form a tree: "Shoes > Running > Trail". Admins create nodes and move 
 
 - `categories.parent_id` is a nullable self-referencing foreign key (adjacency list). No `ON DELETE` action: deleting a node that has children is a 409.
 - The depth limit is the `catalog.max_category_depth` setting (default 5), checked in `CategoryService`, not encoded in the schema.
-- When a write sets a new parent, the service, inside the write transaction:
+- When a write carries `parent_id`, the service, inside the write transaction:
   1. takes `pg_advisory_xact_lock` on one constant key for the tree;
-  2. walks from the new parent to the root with a recursive CTE (`UNION`, so it terminates even on bad data);
-  3. rejects with 409 if the node is on that path (cycle), or if the path length plus the node's subtree height exceeds the limit (depth), naming the ids involved.
-- Writes that do not change the parent skip the guard, so renaming a node in a tree that is already at the limit still works.
+  2. re-reads the node's committed parent, since the node was loaded before the lock; if the parent does not change, or the node moves to the root, it stops here;
+  3. walks from the new parent to the root with a recursive CTE (`UNION`, so this walk terminates even on bad data);
+  4. rejects with 409 if the node is on that path (cycle), or if the path length plus the node's subtree height exceeds the limit (depth), naming the ids involved. An empty path means the parent does not exist, and the foreign key answers 422.
+- Writes without `parent_id` skip the guard, so renaming a node in a tree that is already at the limit still works.
 
 ## Consequences
 

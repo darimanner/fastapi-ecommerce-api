@@ -70,8 +70,16 @@ Each module has a public `router` (`/api/v1/brands`) and an `admin_router` (`/ap
 Standard CRUD needs no service class of its own: `core/crud.py::CRUDService[Model, Create, Update]` gives `get`, `list_offset`, `create`, `replace` (PUT), `update` (PATCH, only the fields sent) and `delete`, each in one transaction. A module writes a service only when it has rules, and puts them in the `_before_write` hook, which runs inside the write transaction:
 
 ```python
+class CategoryTree(Repository[Category], Protocol):
+    async def lock_tree(self) -> None: ...
+    async def path_to_root(self, category_id: UUID) -> list[UUID]: ...
+
+    ...
+
+
 class CategoryUnitOfWork(UnitOfWork, Protocol):
-    categories: CategoryRepository
+    @property
+    def categories(self) -> CategoryTree: ...
 
 
 class CategoryService(CRUDService[Category, CategoryCreate, CategoryUpdate]):
@@ -80,22 +88,32 @@ class CategoryService(CRUDService[Category, CategoryCreate, CategoryUpdate]):
     ) -> None: ...  # cycle and depth checks on parent_id, under a tree lock
 ```
 
-The service declares the slice of the Unit of Work it needs as a Protocol, so it does not import the app-level UoW.
+The service declares the repository methods and the slice of the Unit of Work it needs as Protocols, so it imports neither the app-level UoW nor the SQLAlchemy repository. The UoW member is a read-only property: a plain Protocol attribute would be invariant, and `AppUnitOfWork` declares the concrete `CategoryRepository`.
 
 ### Repository (`modules/{m}/repository.py`)
 
 **Database queries only**:
 
 - Inherits from `SQLAlchemyRepository[Model]` (`infrastructure/repository.py`): get, add, bulk add, update, delete and both pagination styles out of the box
-- Adds specific queries (`get_by_slug`, filtered listings through `_slice`)
+- Adds specific queries (tree walks, filtered listings through `_slice`)
 - Contains no business logic, and no pre-check queries for uniqueness: the database constraint decides, and the violation is mapped to 409/422 centrally
 
 ```python
-class BrandRepository(SQLAlchemyRepository[Brand]):
-    model = Brand
+class CategoryRepository(SQLAlchemyRepository[Category]):
+    model = Category
 
-    async def get_by_slug(self, slug: str) -> Brand | None:
-        return await self.session.scalar(select(Brand).where(Brand.slug == slug))
+    async def path_to_root(self, category_id: UUID) -> list[UUID]:
+        up = (
+            select(Category.id, Category.parent_id)
+            .where(Category.id == category_id)
+            .cte("up", recursive=True)
+        )
+        up = up.union(
+            select(Category.id, Category.parent_id).join(
+                up, Category.id == up.c.parent_id
+            )
+        )
+        return list(await self.session.scalars(select(up.c.id)))
 ```
 
 ### Unit of Work

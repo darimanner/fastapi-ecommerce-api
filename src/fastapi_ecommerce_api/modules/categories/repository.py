@@ -15,6 +15,9 @@ class CategoryRepository(SQLAlchemyRepository[Category]):
         """Serialize tree moves until commit: two checks cannot pass on stale reads."""
         await self.session.execute(select(func.pg_advisory_xact_lock(TREE_LOCK_KEY)))
 
+    async def refresh_parent(self, category: Category) -> None:
+        await self.session.refresh(category, ["parent_id"])
+
     async def path_to_root(self, category_id: UUID) -> list[UUID]:
         """Ids from `category_id` up to its root, inclusive; empty if it is missing."""
         up = (

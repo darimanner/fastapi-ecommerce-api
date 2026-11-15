@@ -11,6 +11,8 @@ from fastapi_ecommerce_api.core.slug import NamedSluggedCreate, slugify
         ("Café Noir", "cafe-noir"),
         ("  --Trail--  ", "trail"),
         ("Кофе", ""),
+        ("Straße Łódź", "strasse-lodz"),
+        ("Øresund Æble Œuvre", "oresund-aeble-oeuvre"),
     ],
 )
 def test_slugify(value: str, expected: str) -> None:
