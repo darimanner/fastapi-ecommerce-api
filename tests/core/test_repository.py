@@ -9,17 +9,19 @@ from tests.core.scratch import Widget, WidgetRepository
 
 
 @pytest.fixture
-def insert_statements(engine: AsyncEngine) -> Iterator[list[str]]:
+def executed(engine: AsyncEngine) -> Iterator[list[str]]:
     statements: list[str] = []
 
     def record(*args: object) -> None:
-        statement = str(args[2])
-        if statement.lstrip().upper().startswith("INSERT"):
-            statements.append(statement)
+        statements.append(str(args[2]).lstrip().upper())
 
     event.listen(engine.sync_engine, "before_cursor_execute", record)
     yield statements
     event.remove(engine.sync_engine, "before_cursor_execute", record)
+
+
+def count(statements: list[str], verb: str) -> int:
+    return sum(s.startswith(verb) for s in statements)
 
 
 async def add_widgets(widgets: WidgetRepository, count: int) -> list[Widget]:
@@ -39,13 +41,39 @@ async def test_get_returns_none_for_missing(widgets: WidgetRepository) -> None:
 
 
 async def test_add_many_inserts_in_one_statement(
-    widgets: WidgetRepository, insert_statements: list[str]
+    widgets: WidgetRepository, executed: list[str]
 ) -> None:
     added = await widgets.add_many([{"name": f"bulk{i}"} for i in range(50)])
 
     assert len(added) == 50
     assert all(isinstance(w, Widget) and w.id for w in added)
-    assert len(insert_statements) == 1
+    assert count(executed, "INSERT") == 1
+
+
+async def test_delete_many_deletes_in_one_statement(
+    widgets: WidgetRepository, executed: list[str]
+) -> None:
+    keep, *drop = await add_widgets(widgets, 4)
+
+    deleted = await widgets.delete_many([w.id for w in drop])
+
+    assert deleted == 3
+    assert count(executed, "DELETE") == 1
+    assert await widgets.get(keep.id) is not None
+    assert all([await widgets.get(w.id) is None for w in drop])
+
+
+async def test_delete_many_counts_only_existing_rows(widgets: WidgetRepository) -> None:
+    widget = await widgets.add(Widget(name="w"))
+
+    assert await widgets.delete_many([widget.id, uuid.uuid7()]) == 1
+
+
+async def test_delete_many_with_no_ids_returns_zero(
+    widgets: WidgetRepository, executed: list[str]
+) -> None:
+    assert await widgets.delete_many([]) == 0
+    assert count(executed, "DELETE") == 0
 
 
 async def test_add_many_preserves_input_order(widgets: WidgetRepository) -> None:

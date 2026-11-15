@@ -107,6 +107,7 @@ Important:
 | `get(entity_id)` | `None` when missing; the service decides whether that is a 404 |
 | `add(entity)`, `update(entity, values)`, `delete(entity)` | flush immediately, so constraint errors surface inside the service call; `update` raises `ValueError` on a key that is not a mapped field |
 | `add_many(rows)` | one `INSERT ... RETURNING` for the whole batch, never a loop of `add`; rows come back in input order |
+| `delete_many(entity_ids)` | one `DELETE ... WHERE id IN (...)`; returns how many rows existed and were deleted |
 | `list_offset(limit, offset)`, `list_after(after, limit)` | return a `Slice`, see [Pagination](#pagination) |
 
 Module repositories subclass it, set `model`, and build filtered queries through the protected `_slice(stmt, limit)` helper.

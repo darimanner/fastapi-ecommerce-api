@@ -1,7 +1,7 @@
 from collections.abc import Mapping, Sequence
 from uuid import UUID
 
-from sqlalchemy import Select, insert, inspect, select
+from sqlalchemy import Select, delete, insert, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fastapi_ecommerce_api.core.db.mixins.uuid_pk import UUIDPrimaryKeyMixin
@@ -43,6 +43,16 @@ class SQLAlchemyRepository[ModelT: UUIDPrimaryKeyMixin]:
     async def delete(self, entity: ModelT) -> None:
         await self.session.delete(entity)
         await self.session.flush()
+
+    async def delete_many(self, entity_ids: Sequence[UUID]) -> int:
+        if not entity_ids:
+            return 0
+        stmt = (
+            delete(self.model)
+            .where(self.model.id.in_(entity_ids))
+            .returning(self.model.id)
+        )
+        return len((await self.session.scalars(stmt)).all())
 
     async def list_offset(self, limit: int, offset: int) -> Slice[ModelT]:
         stmt = select(self.model).order_by(self.model.id).offset(offset)
