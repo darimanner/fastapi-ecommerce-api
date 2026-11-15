@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from types import SimpleNamespace
 from typing import Annotated
 from unittest.mock import patch
+import uuid
 
 from fastapi import FastAPI, Query
 from httpx import ASGITransport, AsyncClient
@@ -15,6 +16,7 @@ from fastapi_ecommerce_api.core.pagination.cursor import (
     CursorPage,
     CursorParams,
     decode_cursor,
+    decode_id_cursor,
     encode_cursor,
 )
 from fastapi_ecommerce_api.core.pagination.offset import OffsetParams, Page
@@ -64,6 +66,23 @@ def test_cursor_round_trip() -> None:
 def test_decode_rejects_garbage(token: str) -> None:
     with pytest.raises(ValidationFailedError, match="Invalid cursor"):
         decode_cursor(token)
+
+
+def test_decode_rejects_deeply_nested_json() -> None:
+    with pytest.raises(ValidationFailedError, match="Invalid cursor"):
+        decode_cursor(b64("[" * 40_000))
+
+
+def test_id_cursor_round_trip() -> None:
+    entity_id = uuid.uuid7()
+
+    assert decode_id_cursor(encode_cursor([str(entity_id)])) == entity_id
+
+
+@pytest.mark.parametrize("values", ['["not-a-uuid"]', "[5]", '["a", "b"]'])
+def test_decode_id_cursor_rejects_non_uuid(values: str) -> None:
+    with pytest.raises(ValidationFailedError, match="Invalid cursor"):
+        decode_id_cursor(b64(values))
 
 
 def test_page_from_slice_converts_in_one_call() -> None:

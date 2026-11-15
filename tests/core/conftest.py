@@ -19,7 +19,9 @@ async def session_factory(
     # Sessions commit into savepoints of one outer transaction rolled back at the end.
     async with engine.connect() as conn:
         transaction = await conn.begin()
-        yield async_sessionmaker(bind=conn, join_transaction_mode="create_savepoint")
+        yield async_sessionmaker(
+            bind=conn, join_transaction_mode="create_savepoint", expire_on_commit=False
+        )
         await transaction.rollback()
 
 

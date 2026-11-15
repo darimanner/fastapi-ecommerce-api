@@ -111,6 +111,8 @@ Services do not pre-check uniqueness or references with extra queries: the datab
 | `23502` not null | `ValidationFailedError("<column> is required")` | 422 |
 | anything else | `AppError()` | generic 500; the original error is logged |
 
+The engine is created with `hide_parameters=True` unless `LOGGER__DEBUG=true`, so logged SQL errors do not carry submitted values either.
+
 Constraint names are predictable thanks to the naming convention on `Base` (see [Database](database.md)), which is what makes the check mapping readable.
 
 ## Unexpected Errors

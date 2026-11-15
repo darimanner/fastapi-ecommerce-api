@@ -2,6 +2,7 @@ import base64
 from collections.abc import Callable
 import json
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, Field, TypeAdapter
 
@@ -9,6 +10,8 @@ from fastapi_ecommerce_api.core.exceptions.base import ValidationFailedError
 from fastapi_ecommerce_api.interfaces.repository import Slice
 
 type CursorKey = list[str | int]
+
+MAX_CURSOR_LENGTH = 512
 
 
 class CursorParams(BaseModel):
@@ -39,6 +42,9 @@ def encode_cursor(values: CursorKey) -> str:
 
 def decode_cursor(token: str) -> CursorKey:
     """Decode a client-supplied cursor; anything malformed is a 422, never a 500."""
+    # Real cursors are short; the cap also stops deep-nesting JSON (RecursionError).
+    if len(token) > MAX_CURSOR_LENGTH:
+        raise ValidationFailedError("Invalid cursor")
     try:
         values = json.loads(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)))
     except ValueError:  # binascii, unicode and JSON errors all subclass it
@@ -46,6 +52,17 @@ def decode_cursor(token: str) -> CursorKey:
     if not (isinstance(values, list) and values and all(map(_is_key_part, values))):
         raise ValidationFailedError("Invalid cursor")
     return values
+
+
+def decode_id_cursor(token: str) -> UUID:
+    """Decode a cursor holding a single entity id, as produced for `list_after`."""
+    values = decode_cursor(token)
+    if len(values) != 1 or not isinstance(values[0], str):
+        raise ValidationFailedError("Invalid cursor")
+    try:
+        return UUID(values[0])
+    except ValueError:
+        raise ValidationFailedError("Invalid cursor") from None
 
 
 def _is_key_part(value: object) -> bool:

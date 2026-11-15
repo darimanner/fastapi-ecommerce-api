@@ -105,8 +105,8 @@ Important:
 | Method | Notes |
 |--------|-------|
 | `get(entity_id)` | `None` when missing; the service decides whether that is a 404 |
-| `add(entity)`, `update(entity, values)`, `delete(entity)` | flush immediately, so constraint errors surface inside the service call |
-| `add_many(rows)` | one `INSERT ... RETURNING` for the whole batch, never a loop of `add` |
+| `add(entity)`, `update(entity, values)`, `delete(entity)` | flush immediately, so constraint errors surface inside the service call; `update` raises `ValueError` on a key that is not a mapped field |
+| `add_many(rows)` | one `INSERT ... RETURNING` for the whole batch, never a loop of `add`; rows come back in input order |
 | `list_offset(limit, offset)`, `list_after(after, limit)` | return a `Slice`, see [Pagination](#pagination) |
 
 Module repositories subclass it, set `model`, and build filtered queries through the protected `_slice(stmt, limit)` helper.
@@ -150,7 +150,7 @@ class CursorPage[T](BaseModel):
     next_cursor: str | None
 ```
 
-The cursor is an opaque urlsafe base64 of a JSON list of key values. `decode_cursor` rejects anything malformed with a 422.
+The cursor is an opaque urlsafe base64 of a JSON list of key values, at most 512 characters. `decode_cursor` rejects anything malformed with a 422; `decode_id_cursor` additionally requires a single UUID, the key `list_after` takes.
 
 `Page.from_slice(slice_, adapter)` and `CursorPage.from_slice(slice_, adapter, key)` convert the whole slice with one module-level `TypeAdapter(list[Schema])` call (`from_attributes=True`), never `model_validate` per row.
 

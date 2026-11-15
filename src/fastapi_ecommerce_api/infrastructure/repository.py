@@ -1,7 +1,7 @@
 from collections.abc import Mapping, Sequence
 from uuid import UUID
 
-from sqlalchemy import Select, insert, select
+from sqlalchemy import Select, insert, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fastapi_ecommerce_api.core.db.mixins.uuid_pk import UUIDPrimaryKeyMixin
@@ -27,12 +27,14 @@ class SQLAlchemyRepository[ModelT: UUIDPrimaryKeyMixin]:
     async def add_many(self, rows: Sequence[Mapping[str, object]]) -> list[ModelT]:
         if not rows:
             return []
-        result = await self.session.scalars(
-            insert(self.model).returning(self.model), list(rows)
-        )
+        stmt = insert(self.model).returning(self.model, sort_by_parameter_order=True)
+        result = await self.session.scalars(stmt, list(rows))
         return list(result.all())
 
     async def update(self, entity: ModelT, values: Mapping[str, object]) -> ModelT:
+        # setattr would silently accept a typo as a plain attribute and lose the change.
+        if unknown := values.keys() - inspect(self.model).attrs.keys():
+            raise ValueError(f"{self.model.__name__} has no fields {sorted(unknown)}")
         for field, value in values.items():
             setattr(entity, field, value)
         await self.session.flush()

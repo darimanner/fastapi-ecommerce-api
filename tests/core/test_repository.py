@@ -48,6 +48,21 @@ async def test_add_many_inserts_in_one_statement(
     assert len(insert_statements) == 1
 
 
+async def test_add_many_preserves_input_order(widgets: WidgetRepository) -> None:
+    names = [f"ordered{i:04}" for i in range(2500)]
+
+    added = await widgets.add_many([{"name": n} for n in reversed(names)])
+
+    assert [w.name for w in added] == list(reversed(names))
+
+
+async def test_update_rejects_unknown_field(widgets: WidgetRepository) -> None:
+    widget = await widgets.add(Widget(name="w"))
+
+    with pytest.raises(ValueError, match="quantity"):
+        await widgets.update(widget, {"quantity": 5})
+
+
 async def test_add_many_with_no_rows_returns_empty(widgets: WidgetRepository) -> None:
     assert await widgets.add_many([]) == []
 

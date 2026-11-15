@@ -26,6 +26,16 @@ async def test_commit_persists(session_factory: async_sessionmaker[AsyncSession]
     assert await stored(session_factory, "kept") is not None
 
 
+async def test_entities_stay_readable_after_commit(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with WidgetUoW(session_factory) as uow:
+        widget = await uow.widgets.add(Widget(name="readable"))
+        await uow.commit()
+
+        assert widget.name == "readable"
+
+
 async def test_exit_without_commit_rolls_back(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:

@@ -6,7 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from fastapi_ecommerce_api.config.settings import settings
 
-engine = create_async_engine(str(settings.database.url), pool_pre_ping=True)
+engine = create_async_engine(
+    str(settings.database.url),
+    pool_pre_ping=True,
+    # Keep submitted values (emails, addresses) out of error messages and logs.
+    hide_parameters=not settings.logger.debug,
+)
 session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
 
