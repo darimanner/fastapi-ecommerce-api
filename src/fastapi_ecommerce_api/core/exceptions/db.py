@@ -10,8 +10,6 @@ from fastapi_ecommerce_api.core.exceptions.base import (
     ValidationFailedError,
 )
 
-# Postgres reports the columns as "Key (name)=(value) ..."; only the names are kept,
-# values may be private and never reach the response.
 KEY_COLUMNS = re.compile(r"Key \((.+?)\)=")
 
 

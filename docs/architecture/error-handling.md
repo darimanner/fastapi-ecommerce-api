@@ -23,7 +23,6 @@ class AppError(Exception):
 
     def __init__(self, detail: str | None = None, **extra: object) -> None:
         self.detail = detail or self.title
-        # Extra problem fields (RFC 7807 extension members), e.g. `errors`.
         self.extra = extra
         super().__init__(self.detail)
 
