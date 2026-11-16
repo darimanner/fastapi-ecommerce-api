@@ -2,7 +2,7 @@
 
 > Status: partially implemented
 
-Implemented: `Base` with the naming convention, sessions, `TimestampMixin`, `UUIDPrimaryKeyMixin`, the generic repository, Unit of Work, pagination, database error mapping and the category tree queries. Planned: the soft delete, audit and versioned mixins, and the money type (decided with the catalog).
+Implemented: `Base` with the naming convention, sessions, `TimestampMixin`, `UUIDPrimaryKeyMixin`, the generic repository, Unit of Work, pagination, database error mapping, the category tree queries and the product listing query. Planned: the soft delete, audit and versioned mixins.
 
 ## Base & Naming Convention
 
@@ -23,14 +23,19 @@ Without it Alembic generates random names, and the migrations diff diverges betw
 ## Type Mapping
 
 ```python
-type_annotation_map = {
-    datetime.datetime: DateTime(timezone=True),
-    Decimal: Numeric(precision=18, scale=4),
-    dict: JSONB,
-}
+type_annotation_map = {datetime.datetime: DateTime(timezone=True)}
 ```
 
-Money is always `Decimal`, never `float`. All datetimes are timezone-aware UTC.
+All datetimes are timezone-aware UTC. JSONB columns name the type explicitly (`mapped_column(JSONB)`).
+
+Money is an `int` in minor units (cents) of the one store currency, never `float` or `Decimal`: sums and comparisons are exact, and Postgres guards the invariant with `CHECK (price >= 0)`. Orders will snapshot the unit price, so a later price change never rewrites history.
+
+## Catalog Tables
+
+- `products`: `brand_id` (nullable) and `category_id` are indexed FKs without an ON DELETE action, so deleting a brand or category that still has products is a 409.
+- `product_variants`: `sku` unique, `price` and `stock` with `CHECK >= 0`, `options` JSONB (`{"size": "M"}`) with `UNIQUE (product_id, options)` and a GIN index for `@>` filters, see [ADR-0005](../adr/0005-variant-options-jsonb.md). `product_id` is `ON DELETE CASCADE`: variants are part of the product.
+
+The public listing (`ProductRepository.list_public`) joins products to a per-product `min(price)` over the variants that match the option filter, so the price filters and sorts apply to the lowest matching price. The category filter walks the subtree with a recursive CTE over a bare `table("categories", ...)`, so the products module never imports the categories module.
 
 ## Mixins
 
@@ -154,9 +159,12 @@ class Page[T](BaseModel):
 class CursorPage[T](BaseModel):
     items: list[T]
     next_cursor: str | None
+    total: int | None = None  # same rule
 ```
 
 The cursor is an opaque urlsafe base64 of a JSON list of key values, at most 512 characters. `decode_cursor` rejects anything malformed with a 422; `decode_id_cursor` additionally requires a single UUID, the key `list_after` takes.
+
+The product listing keys its cursor by sort: `newest` is `[id]` (UUIDv7 grows with creation time, so `id DESC` is newest first), the price sorts are `[price, id]` compared as a row value, `(price, id) > (:price, :id)`. A cursor from a page with another sort is a 422. The `total` comes from the count cache, see [Caching](caching-and-tasks.md#count-cache).
 
 `Page.from_slice(slice_, adapter)` and `CursorPage.from_slice(slice_, adapter, key)` convert the whole slice with one module-level `TypeAdapter(list[Schema])` call (`from_attributes=True`), never `model_validate` per row.
 

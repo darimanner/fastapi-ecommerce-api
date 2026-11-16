@@ -2,7 +2,7 @@
 
 > Status: partially implemented
 
-Implemented today under `src/ecommerce/`: `config/settings.py`, `main.py`, `api/health.py`, `core/db/` (`model.py`, `sessions.py`, `mixins/timestamp.py`, `mixins/uuid_pk.py`), `core/exceptions/` (`base.py`, `handlers.py`, `db.py`), `core/pagination/`, `core/observability/` (`logging.py`, `middleware.py`), `core/crud.py`, `core/slug.py`, `interfaces/` (`repository.py`, `unit_of_work.py`), `infrastructure/` (`repository.py`, `unit_of_work.py`), `uow.py`, and the `brands` and `categories` modules. The rest of the tree is the target layout.
+Implemented today under `src/ecommerce/`: `config/settings.py`, `main.py`, `api/health.py`, `core/db/` (`model.py`, `sessions.py`, `mixins/timestamp.py`, `mixins/uuid_pk.py`), `core/exceptions/` (`base.py`, `handlers.py`, `db.py`), `core/pagination/`, `core/observability/` (`logging.py`, `middleware.py`), `core/crud.py`, `core/slug.py`, `core/redis.py`, `core/counts.py`, `interfaces/` (`repository.py`, `unit_of_work.py`), `infrastructure/` (`repository.py`, `unit_of_work.py`), `uow.py`, `cache.py`, and the `brands`, `categories` and `products` modules. The rest of the tree is the target layout.
 
 The approach is a **modular monolith**: each domain lives in its own folder and is self-contained. This improves cohesion, makes it easier to extract a module into a separate service later, and keeps feature work local.
 
@@ -14,6 +14,7 @@ src/ecommerce/
 │   └── settings.py           # pydantic-settings: Settings root + sub-models
 ├── main.py                   # FastAPI app factory (create_app), middleware, lifespan
 ├── uow.py                    # AppUnitOfWork: composition root of module repositories
+├── cache.py                  # CatalogCounts: count cache shared by catalog modules
 │
 ├── core/                     # Framework code - reused as is
 │   ├── db/
@@ -31,6 +32,8 @@ src/ecommerce/
 │   ├── events/
 │   │   ├── bus.py            # In-process EventBus
 │   │   └── base.py           # DomainEvent base
+│   ├── redis.py              # Redis client, get_redis dependency
+│   ├── counts.py             # VersionedCounts: cached totals invalidated by INCR
 │   ├── cache/
 │   │   ├── backend.py        # AbstractCache Protocol
 │   │   └── redis.py          # RedisCache
@@ -76,7 +79,7 @@ src/ecommerce/
 
 ## Module template
 
-A module holds only the files it needs. `brands` is model, schemas, repository and router, with CRUD from `CRUDService`; `categories` adds `service.py` and `exceptions.py` for the tree rules. The full set of files a module may have:
+A module holds only the files it needs. `brands` is model, schemas, repository and router, with CRUD from `CRUDService`; `categories` adds `service.py` and `exceptions.py` for the tree rules; `products` holds two models (a product and its variants) with a service each. The full set of files a module may have:
 
 ```
 modules/{name}/

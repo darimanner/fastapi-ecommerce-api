@@ -9,7 +9,7 @@ A production-grade e-commerce REST API built with FastAPI, SQLAlchemy and Postgr
 
 Work in progress. The v1 scope:
 
-- Catalog: category tree with cycle and depth checks, brands (done); products with variants (SKU, price, stock, options)
+- Catalog (done): category tree with cycle and depth checks, brands, products with variants (SKU, price, stock, options), a public listing with filters, keyset pages and totals from a Redis count cache
 - Accounts: registration, JWT access and refresh tokens, role-based permissions
 - Cart and checkout with stock reservation in one transaction
 - Order lifecycle with a state machine and automatic expiry of unpaid reservations
@@ -22,7 +22,7 @@ Work in progress. The v1 scope:
 | --- | --- |
 | API | FastAPI, Pydantic v2 |
 | Database | PostgreSQL, SQLAlchemy 2 (async, asyncpg), Alembic |
-| Background jobs and cache | Taskiq, Redis (planned) |
+| Background jobs and cache | Redis (count cache); Taskiq (planned) |
 | Observability | structlog; OpenTelemetry, Prometheus, Grafana (planned) |
 | Tooling | uv, ruff, mypy (strict), pytest, testcontainers, Docker |
 
@@ -53,12 +53,12 @@ make migrate
 | Target | What it runs |
 | --- | --- |
 | `make install` | `uv sync` and `pre-commit install`: dependencies and git hooks |
-| `make up` | `docker compose up -d --wait`: starts PostgreSQL and waits until it is healthy |
-| `make down` | `docker compose down`: stops PostgreSQL, the data volume stays |
+| `make up` | `docker compose up -d --wait`: starts PostgreSQL and Redis and waits until they are healthy |
+| `make down` | `docker compose down`: stops them, the PostgreSQL data volume stays |
 | `make migrate` | `alembic upgrade head`: applies all migrations |
 | `make revision m="..."` | `alembic revision --autogenerate`: new migration from model changes |
 | `make run` | `fastapi dev`: dev server with reload on http://127.0.0.1:8000 |
-| `make test` | `pytest --cov`: tests on a throwaway PostgreSQL container, fails below 85% coverage |
+| `make test` | `pytest --cov`: tests on throwaway PostgreSQL and Redis containers, fails below 85% coverage |
 | `make check` | `pre-commit run --all-files`: ruff, mypy, lock check, file hygiene |
 
 ## Run
@@ -71,7 +71,7 @@ Health checks are served at http://127.0.0.1:8000/health/live and http://127.0.0
 
 ## Checks
 
-The tests start PostgreSQL in a container, so Docker must be running. They build the schema with the migrations and fail if the models have changes no migration covers.
+The tests start PostgreSQL and Redis in containers, so Docker must be running. They build the schema with the migrations and fail if the models have changes no migration covers.
 
 ```bash
 make check   # pre-commit hooks: ruff, mypy, lock check

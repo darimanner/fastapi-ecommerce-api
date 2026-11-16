@@ -67,7 +67,7 @@ Each module has a public `router` (`/api/v1/brands`) and an `admin_router` (`/ap
 - Publishes domain events (planned)
 - **Depends only on Protocol abstractions** (UoW, Cache), not on SQLAlchemy
 
-Standard CRUD needs no service class of its own: `core/crud.py::CRUDService[Model, Create, Update]` gives `get`, `list_offset`, `create`, `replace` (PUT), `update` (PATCH, only the fields sent) and `delete`, each in one transaction. A module writes a service only when it has rules, and puts them in the `_before_write` hook, which runs inside the write transaction:
+Standard CRUD needs no service class of its own: `core/crud.py::CRUDService[Model, Create, Update]` gives `get`, `list_offset`, `create`, `replace` (PUT), `update` (PATCH, only the fields sent) and `delete`, each in one transaction. A module writes a service only when it has rules, and puts them in the `_before_write` hook, which runs inside the write transaction. `_after_write` runs after the commit; catalog services use it to bump the count cache version ([Caching](caching-and-tasks.md#count-cache)):
 
 ```python
 class CategoryTree(Repository[Category], Protocol):

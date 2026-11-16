@@ -2,7 +2,7 @@
 
 > Status: partially implemented
 >
-> Exists today: a multi-stage uv `Dockerfile` (non-root user, no migrations on startup), `compose.yaml` with PostgreSQL, `make up`, `make down`, `make migrate`, `make run`, and GitHub Actions CI in `.github/workflows/ci.yml` (`uv sync --locked`, `make check`, `make test`, docker build).
+> Exists today: a multi-stage uv `Dockerfile` (non-root user, no migrations on startup), `compose.yaml` with PostgreSQL and Redis, `make up`, `make down`, `make migrate`, `make run`, and GitHub Actions CI in `.github/workflows/ci.yml` (`uv sync --locked`, `make check`, `make test`, docker build).
 
 ## Dockerfile
 
