@@ -194,3 +194,16 @@ async def test_total_is_cached_until_a_catalog_write(
 
     assert (len(cached["items"]), cached["total"]) == (4, 3)
     assert fresh["total"] == 5
+
+
+async def test_category_move_refreshes_the_total(shop: Shop) -> None:
+    shoes = {"category_id": shop.refs["Shoes"]}
+    before = await shop.list(**shoes)
+
+    await shop.client.patch(
+        f"/api/v1/admin/categories/{shop.refs['Hats']}",
+        json={"parent_id": shop.refs["Shoes"]},
+    )
+    after = await shop.list(**shoes)
+
+    assert (before["total"], after["total"]) == (2, 3)

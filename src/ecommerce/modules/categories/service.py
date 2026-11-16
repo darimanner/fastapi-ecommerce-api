@@ -1,6 +1,7 @@
 from typing import Any, Protocol
 from uuid import UUID
 
+from ecommerce.core.counts import VersionedCounts
 from ecommerce.core.crud import CRUDService
 from ecommerce.interfaces.repository import Repository
 from ecommerce.interfaces.unit_of_work import UnitOfWork
@@ -32,10 +33,17 @@ class CategoryUnitOfWork(UnitOfWork, Protocol):
 
 
 class CategoryService(CRUDService[Category, CategoryCreate, CategoryUpdate]):
-    def __init__(self, uow: CategoryUnitOfWork, max_depth: int) -> None:
+    def __init__(
+        self, uow: CategoryUnitOfWork, max_depth: int, counts: VersionedCounts
+    ) -> None:
         super().__init__(uow, lambda: uow.categories)
         self._tree_uow = uow
         self._max_depth = max_depth
+        self._counts = counts
+
+    async def _after_write(self) -> None:
+        # Category filters include descendants, so a move changes product totals.
+        await self._counts.bump()
 
     async def _before_write(
         self, entity: Category | None, values: dict[str, Any]

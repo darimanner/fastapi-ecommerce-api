@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
 
+from ecommerce.cache import CatalogCounts
 from ecommerce.config.settings import settings
 from ecommerce.core.pagination.offset import OffsetParams, Page
 from ecommerce.modules.categories.models import Category
@@ -16,8 +17,8 @@ from ecommerce.modules.categories.service import CategoryService
 from ecommerce.uow import UoW
 
 
-def get_service(uow: UoW) -> CategoryService:
-    return CategoryService(uow, settings.catalog.max_category_depth)
+def get_service(uow: UoW, counts: CatalogCounts) -> CategoryService:
+    return CategoryService(uow, settings.catalog.max_category_depth, counts)
 
 
 Service = Annotated[CategoryService, Depends(get_service)]
