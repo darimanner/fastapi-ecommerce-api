@@ -29,6 +29,7 @@ Not every decision is an ADR. There is no need for an ADR for "chose PyJWT over 
 - [0001 - Layered architecture with Unit of Work](0001-layered-architecture-with-uow.md)
 - [0002 - UUIDv7 primary keys](0002-uuid7-primary-keys.md)
 - [0003 - Pagination without count(*)](0003-pagination-without-count.md)
+- [0004 - Category tree as an adjacency list with a locked guard](0004-category-tree-adjacency-list.md)
 
 ## Candidates
 

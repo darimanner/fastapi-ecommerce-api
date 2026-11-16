@@ -2,7 +2,7 @@
 
 > Status: partially implemented
 
-Implemented: `Base` with the naming convention, sessions, `TimestampMixin`, `UUIDPrimaryKeyMixin`, the generic repository, Unit of Work, pagination and database error mapping. Planned: the soft delete, audit and versioned mixins, and the money type (decided with the catalog).
+Implemented: `Base` with the naming convention, sessions, `TimestampMixin`, `UUIDPrimaryKeyMixin`, the generic repository, Unit of Work, pagination, database error mapping and the category tree queries. Planned: the soft delete, audit and versioned mixins, and the money type (decided with the catalog).
 
 ## Base & Naming Convention
 
@@ -127,8 +127,13 @@ uv run alembic downgrade -1
 ```
 
 - Alembic is configured in `pyproject.toml` (`[tool.alembic]`), with `post_write_hooks` running `ruff check --fix` and `ruff format`, so migrations are formatted automatically
-- Target: `migrations/env.py` imports all models through an `import_all_models()` utility, which walks `src/fastapi_ecommerce_api/modules/*/models.py` and calls `importlib.import_module`, so Alembic sees all tables without a manual list. Until the first module exists, model modules are imported in `env.py` by hand
+- `migrations/env.py` calls `import_all_models()`, which walks `src/fastapi_ecommerce_api/modules/*/models.py` and calls `importlib.import_module`, so Alembic sees all tables without a manual list
+- `TimestampMixin` sets `eager_defaults`: server-set `created_at`/`updated_at` come back through `RETURNING`, so an entity stays readable after the Unit of Work has closed its session
 - Migrations run as a **separate CI/CD step**, not at app startup, otherwise several pods would try to migrate in parallel
+
+## Category tree
+
+`categories.parent_id` is an adjacency list. Depth is limited by the `catalog.max_category_depth` setting (default 5), not by the schema. When a write sets a new parent, `CategoryService` takes a transaction-scoped advisory lock (`pg_advisory_xact_lock`), walks from the new parent to the root with a recursive CTE, and rejects the move with 409 if the node itself is on that path (a cycle) or if parent depth plus the node's subtree height exceeds the limit. The lock makes two concurrent moves check one after the other. See [ADR-0004](../adr/0004-category-tree-adjacency-list.md).
 
 ## Pagination
 

@@ -13,6 +13,8 @@ class Slice[T]:
 
 
 class Repository[T](Protocol):
+    model: type[T]
+
     async def get(self, entity_id: UUID) -> T | None: ...
 
     async def add(self, entity: T) -> T: ...

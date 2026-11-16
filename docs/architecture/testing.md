@@ -2,7 +2,7 @@
 
 > Status: partially implemented
 >
-> Exists today: pytest-asyncio, httpx `AsyncClient`, testcontainers PostgreSQL, schema built by Alembic migrations plus `alembic check`, per-test transaction rollback, `make test` (`pytest --cov`, 85% gate), and CI via `.github/workflows/ci.yml`.
+> Exists today: pytest-asyncio, httpx `AsyncClient`, testcontainers PostgreSQL, schema built by Alembic migrations plus `alembic check`, per-test transaction rollback, `make test` (`pytest --cov`, 85% gate), and CI via `.github/workflows/ci.yml`. Module tests live in `tests/modules/` and go through HTTP; the `client` fixture swaps both `get_db` and `get_uow` for sessions on the test transaction. The category tree rules have SQL in them, so they are tested against Postgres, including a race of two concurrent moves on real commits. Planned: `FakeUnitOfWork` unit tests for services whose rules need no SQL (orders), polyfactory factories.
 
 ## Structure
 
@@ -35,26 +35,20 @@ A pyramid:
 
 ### Unit
 
+Planned, for services whose rules need no SQL (the order state machine):
+
 - Services are tested with `FakeUnitOfWork` and `FakeRepository` (in-memory dict)
 - No real DB, no FastAPI
 - They cover business rules and edge cases
+- Uniqueness and references are not unit-tested: the database constraints own them, so they are tested through HTTP against Postgres
 
 ```python
-async def test_create_brand_rejects_duplicates(fake_uow: FakeUnitOfWork) -> None:
-    service = BrandService(fake_uow, FakeEventBus())
+async def test_paid_order_cannot_go_back_to_pending(fake_uow: FakeUnitOfWork) -> None:
+    order = await fake_uow.orders.add(an_order(status=OrderStatus.PAID))
+    service = OrderService(fake_uow)
 
-    await service.create(BrandCreate(name="nike"))
-    with pytest.raises(BrandAlreadyExistsError):
-        await service.create(BrandCreate(name="nike"))
-
-
-async def test_create_brand_publishes_event(fake_uow: FakeUnitOfWork) -> None:
-    events = FakeEventBus()
-    service = BrandService(fake_uow, events)
-
-    brand = await service.create(BrandCreate(name="nike"))
-
-    assert events.published == [BrandCreated(brand_id=brand.id)]
+    with pytest.raises(IllegalTransitionError):
+        await service.transition(order.id, OrderStatus.PENDING)
 ```
 
 ### Integration
