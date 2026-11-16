@@ -36,12 +36,16 @@ class RecordingService(CRUDService[Widget, WidgetCreate, WidgetUpdate]):
     def __init__(self, uow: WidgetUoW, fail: bool = False) -> None:
         super().__init__(uow, lambda: uow.widgets)
         self.calls: list[tuple[Widget | None, dict[str, Any]]] = []
+        self.after_writes = 0
         self.fail = fail
 
     async def _before_write(self, entity: Widget | None, values: dict[str, Any]) -> None:
         self.calls.append((entity, values))
         if self.fail:
             raise RuntimeError("rejected")
+
+    async def _after_write(self) -> None:
+        self.after_writes += 1
 
 
 @pytest.fixture
@@ -131,3 +135,19 @@ async def test_hook_failure_persists_nothing(
         uow, lambda: uow.widgets
     ).list_offset(OffsetParams())
     assert page.items == []
+    assert failing.after_writes == 0
+
+
+async def test_after_write_runs_once_per_committed_write(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    service = RecordingService(WidgetUoW(session_factory))
+
+    created = await service.create(WidgetCreate(name="w"))
+    await service.update(created.id, WidgetUpdate(qty=5))
+    await service.replace(created.id, WidgetCreate(name="r"))
+    await service.delete(created.id)
+    with pytest.raises(NotFoundError):
+        await service.delete(created.id)
+
+    assert service.after_writes == 4
