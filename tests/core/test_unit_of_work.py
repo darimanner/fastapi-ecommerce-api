@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from fastapi_ecommerce_api.infrastructure.unit_of_work import SQLAlchemyUnitOfWork
+from ecommerce.infrastructure.unit_of_work import SQLAlchemyUnitOfWork
 from tests.core.scratch import Widget, WidgetRepository
 
 

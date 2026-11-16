@@ -6,9 +6,9 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fastapi_ecommerce_api.core.exceptions.base import AppError
-from fastapi_ecommerce_api.core.exceptions.db import map_integrity_error
-from fastapi_ecommerce_api.core.exceptions.handlers import register_exception_handlers
+from ecommerce.core.exceptions.base import AppError
+from ecommerce.core.exceptions.db import map_integrity_error
+from ecommerce.core.exceptions.handlers import register_exception_handlers
 from tests.core.scratch import Widget
 
 

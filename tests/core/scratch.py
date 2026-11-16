@@ -3,9 +3,9 @@ import uuid
 from sqlalchemy import CheckConstraint, ForeignKey, MetaData
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from fastapi_ecommerce_api.core.db.mixins.uuid_pk import UUIDPrimaryKeyMixin
-from fastapi_ecommerce_api.core.db.model import Base
-from fastapi_ecommerce_api.infrastructure.repository import SQLAlchemyRepository
+from ecommerce.core.db.mixins.uuid_pk import UUIDPrimaryKeyMixin
+from ecommerce.core.db.model import Base
+from ecommerce.infrastructure.repository import SQLAlchemyRepository
 
 
 class ScratchBase(DeclarativeBase):

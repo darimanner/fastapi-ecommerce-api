@@ -9,7 +9,7 @@
 `PyJWT`, **not `python-jose`**: the latter is abandoned and has CVEs.
 
 ```python
-# src/fastapi_ecommerce_api/core/security/jwt.py
+# src/ecommerce/core/security/jwt.py
 def encode_token(payload: dict, expires_in: timedelta) -> str: ...
 def decode_token(
     token: str,
@@ -40,7 +40,7 @@ Claims structure:
 `passlib[argon2]` or `argon2-cffi` directly.
 
 ```python
-# src/fastapi_ecommerce_api/core/security/passwords.py
+# src/ecommerce/core/security/passwords.py
 from argon2 import PasswordHasher
 
 hasher = PasswordHasher()  # argon2id, sane defaults
@@ -62,7 +62,7 @@ Argon2id is the current OWASP standard. Not bcrypt (old), not PBKDF2 (slow with 
 ### Auth Module
 
 ```
-src/fastapi_ecommerce_api/modules/auth/
+src/ecommerce/modules/auth/
 ├── router.py      # POST /auth/register, /auth/login, /auth/refresh, /auth/logout
 ├── service.py     # AuthService.login, register, refresh, logout
 ├── models.py      # User
@@ -80,7 +80,7 @@ src/fastapi_ecommerce_api/modules/auth/
 A user has roles, roles have permissions, and permissions go into the JWT claims.
 
 ```python
-# src/fastapi_ecommerce_api/modules/auth/deps.py
+# src/ecommerce/modules/auth/deps.py
 def requires(*permissions: str) -> Callable:
     async def dep(user: User = Depends(get_current_user)) -> User:
         if not all(p in user.permissions for p in permissions):
@@ -98,7 +98,7 @@ For complex rules the alternative is **policy-based** authorization: a separate 
 
 ## Security Headers
 
-Middleware (`src/fastapi_ecommerce_api/core/security/headers.py`) adds:
+Middleware (`src/ecommerce/core/security/headers.py`) adds:
 
 ```
 Strict-Transport-Security: max-age=31536000; includeSubDomains

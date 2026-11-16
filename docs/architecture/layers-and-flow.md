@@ -124,7 +124,7 @@ class CategoryRepository(SQLAlchemyRepository[Category]):
 - Nothing persists without an explicit `commit()`; exit, early return or an exception roll back
 - The service never works with `session` directly
 
-`SQLAlchemyUnitOfWork` owns the session lifecycle. The app-level subclass in `src/fastapi_ecommerce_api/uow.py` (the composition root, so `core/` stays module-agnostic) attaches every module's repository in `_init_repositories()`, and routers get it through the `UoW` dependency:
+`SQLAlchemyUnitOfWork` owns the session lifecycle. The app-level subclass in `src/ecommerce/uow.py` (the composition root, so `core/` stays module-agnostic) attaches every module's repository in `_init_repositories()`, and routers get it through the `UoW` dependency:
 
 ```python
 class AppUnitOfWork(SQLAlchemyUnitOfWork):

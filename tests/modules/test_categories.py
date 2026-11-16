@@ -9,15 +9,15 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from fastapi_ecommerce_api.config.settings import settings
-from fastapi_ecommerce_api.modules.categories.exceptions import CategoryCycleError
-from fastapi_ecommerce_api.modules.categories.models import Category
-from fastapi_ecommerce_api.modules.categories.schemas import (
+from ecommerce.config.settings import settings
+from ecommerce.modules.categories.exceptions import CategoryCycleError
+from ecommerce.modules.categories.models import Category
+from ecommerce.modules.categories.schemas import (
     CategoryCreate,
     CategoryUpdate,
 )
-from fastapi_ecommerce_api.modules.categories.service import CategoryService
-from fastapi_ecommerce_api.uow import AppUnitOfWork
+from ecommerce.modules.categories.service import CategoryService
+from ecommerce.uow import AppUnitOfWork
 
 CATEGORIES = "/api/v1/categories"
 ADMIN = "/api/v1/admin/categories"

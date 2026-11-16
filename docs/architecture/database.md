@@ -6,7 +6,7 @@ Implemented: `Base` with the naming convention, sessions, `TimestampMixin`, `UUI
 
 ## Base & Naming Convention
 
-`Base` (`src/fastapi_ecommerce_api/core/db/model.py`) defines `MetaData` with a naming convention for all constraints:
+`Base` (`src/ecommerce/core/db/model.py`) defines `MetaData` with a naming convention for all constraints:
 
 ```python
 convention = {
@@ -34,7 +34,7 @@ Money is always `Decimal`, never `float`. All datetimes are timezone-aware UTC.
 
 ## Mixins
 
-All live in `src/fastapi_ecommerce_api/core/db/mixins/` and are applied as needed.
+All live in `src/ecommerce/core/db/mixins/` and are applied as needed.
 
 ### UUIDPrimaryKeyMixin
 
@@ -78,7 +78,7 @@ Optimistic locking, for rare high-contention tables (inventory, balance).
 
 ## Sessions
 
-`src/fastapi_ecommerce_api/core/db/sessions.py`:
+`src/ecommerce/core/db/sessions.py`:
 
 ```python
 engine = create_async_engine(str(settings.database.url), pool_pre_ping=True)
@@ -127,7 +127,7 @@ uv run alembic downgrade -1
 ```
 
 - Alembic is configured in `pyproject.toml` (`[tool.alembic]`), with `post_write_hooks` running `ruff check --fix` and `ruff format`, so migrations are formatted automatically
-- `migrations/env.py` calls `import_all_models()`, which walks `src/fastapi_ecommerce_api/modules/*/models.py` and calls `importlib.import_module`, so Alembic sees all tables without a manual list
+- `migrations/env.py` calls `import_all_models()`, which walks `src/ecommerce/modules/*/models.py` and calls `importlib.import_module`, so Alembic sees all tables without a manual list
 - `TimestampMixin` sets `eager_defaults`: server-set `created_at`/`updated_at` come back through `RETURNING`, so an entity stays readable after the Unit of Work has closed its session
 - Migrations run as a **separate CI/CD step**, not at app startup, otherwise several pods would try to migrate in parallel
 

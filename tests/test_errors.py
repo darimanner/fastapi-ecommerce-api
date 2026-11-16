@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
-from fastapi_ecommerce_api.core.exceptions.base import NotFoundError
-from fastapi_ecommerce_api.main import create_app
+from ecommerce.core.exceptions.base import NotFoundError
+from ecommerce.main import create_app
 
 app = create_app()
 

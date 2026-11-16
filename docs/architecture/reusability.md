@@ -11,14 +11,14 @@ New services do not clone this repository. They start from the template, which h
 Code that does not depend on the e-commerce domain and is a candidate for the template once it settles:
 
 ```
-src/fastapi_ecommerce_api/core/            # cross-cutting framework code
-src/fastapi_ecommerce_api/interfaces/      # Protocols: repository, Unit of Work, cache
-src/fastapi_ecommerce_api/infrastructure/  # generic SQLAlchemy implementations
+src/ecommerce/core/            # cross-cutting framework code
+src/ecommerce/interfaces/      # Protocols: repository, Unit of Work, cache
+src/ecommerce/infrastructure/  # generic SQLAlchemy implementations
 ```
 
 ## What is domain
 
-Everything under `src/fastapi_ecommerce_api/modules/` (brands, categories, products, cart, orders, auth) plus their migrations and tests. It never goes into the template, except `auth` if several services end up needing the same scheme.
+Everything under `src/ecommerce/modules/` (brands, categories, products, cart, orders, auth) plus their migrations and tests. It never goes into the template, except `auth` if several services end up needing the same scheme.
 
 ## Starting a new service
 
@@ -45,17 +45,17 @@ Checks that can be automated (for example, in CI as a guard):
 
 ```bash
 # 1. core/, interfaces/, infrastructure/ do not import from modules/
-! grep -r "from fastapi_ecommerce_api.modules" src/fastapi_ecommerce_api/core src/fastapi_ecommerce_api/interfaces src/fastapi_ecommerce_api/infrastructure
+! grep -r "from ecommerce.modules" src/ecommerce/core src/ecommerce/interfaces src/ecommerce/infrastructure
 
 # 2. Modules do not import each other (except auth)
-for module in src/fastapi_ecommerce_api/modules/*/; do
+for module in src/ecommerce/modules/*/; do
     name=$(basename "$module")
     if [ "$name" = "auth" ]; then continue; fi
-    ! grep -r "from fastapi_ecommerce_api.modules\." "$module" | grep -v "from fastapi_ecommerce_api.modules.auth"
+    ! grep -r "from ecommerce.modules\." "$module" | grep -v "from ecommerce.modules.auth"
 done
 
 # 3. Services do not import HTTPException
-! grep -r "HTTPException" src/fastapi_ecommerce_api/modules/*/service.py
+! grep -r "HTTPException" src/ecommerce/modules/*/service.py
 ```
 
 ## Template evolution

@@ -10,17 +10,17 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 import pytest
 
-from fastapi_ecommerce_api.core.exceptions.base import ValidationFailedError
-from fastapi_ecommerce_api.core.exceptions.handlers import register_exception_handlers
-from fastapi_ecommerce_api.core.pagination.cursor import (
+from ecommerce.core.exceptions.base import ValidationFailedError
+from ecommerce.core.exceptions.handlers import register_exception_handlers
+from ecommerce.core.pagination.cursor import (
     CursorPage,
     CursorParams,
     decode_cursor,
     decode_id_cursor,
     encode_cursor,
 )
-from fastapi_ecommerce_api.core.pagination.offset import OffsetParams, Page
-from fastapi_ecommerce_api.interfaces.repository import Slice
+from ecommerce.core.pagination.offset import OffsetParams, Page
+from ecommerce.interfaces.repository import Slice
 
 
 class ItemOut(BaseModel):

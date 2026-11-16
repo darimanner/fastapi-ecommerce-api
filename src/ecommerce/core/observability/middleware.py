@@ -1,0 +1,36 @@
+import re
+import time
+from uuid import uuid4
+
+from fastapi import Request, Response
+from starlette.middleware.base import RequestResponseEndpoint
+import structlog
+
+from ecommerce.core.exceptions.handlers import unexpected_error_handler
+from ecommerce.core.observability.logging import log
+
+REQUEST_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
+
+
+async def request_context(
+    request: Request, call_next: RequestResponseEndpoint
+) -> Response:
+    request_id = request.headers.get("X-Request-ID", "")
+    if not REQUEST_ID.fullmatch(request_id):
+        request_id = uuid4().hex
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(
+        request_id=request_id, method=request.method, path=request.url.path
+    )
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        response = await unexpected_error_handler(request, exc)
+    response.headers["X-Request-ID"] = request_id
+    log.info(
+        "request.completed",
+        status=response.status_code,
+        duration_ms=round((time.perf_counter() - started) * 1000, 1),
+    )
+    return response

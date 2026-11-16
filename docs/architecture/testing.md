@@ -132,7 +132,7 @@ async def test_list_products_filters_by_brand(client, db_session):
 `pytest-cov` with a threshold in CI:
 
 ```bash
-uv run pytest --cov=fastapi_ecommerce_api --cov-fail-under=85 --cov-report=term-missing
+uv run pytest --cov=ecommerce --cov-fail-under=85 --cov-report=term-missing
 ```
 
 Targets by layer:
@@ -156,8 +156,8 @@ Targets by layer:
 ```yaml
 - ruff check .
 - ruff format --check .
-- mypy src/fastapi_ecommerce_api
-- pytest --cov=fastapi_ecommerce_api --cov-fail-under=85
+- mypy src/ecommerce
+- pytest --cov=ecommerce --cov-fail-under=85
 - pip-audit
 ```
 

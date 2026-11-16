@@ -27,7 +27,7 @@ Adopt the **Router -> Service -> Repository -> DB** pattern with an explicit **U
 - Services depend on `AbstractUnitOfWork` (a Protocol), not on `AsyncSession`
 - The UoW aggregates repositories and manages commit/rollback
 - Repositories inherit the generic `SQLAlchemyRepository[Model]` from `infrastructure/`
-- Each domain is a self-contained module in `src/fastapi_ecommerce_api/modules/{name}/` with its own router/service/repository/models/schemas
+- Each domain is a self-contained module in `src/ecommerce/modules/{name}/` with its own router/service/repository/models/schemas
 
 ## Consequences
 

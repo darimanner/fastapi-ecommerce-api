@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from fastapi_ecommerce_api.config.settings import load_settings
+from ecommerce.config.settings import load_settings
 
 
 @pytest.mark.parametrize(

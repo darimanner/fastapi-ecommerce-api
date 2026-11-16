@@ -19,9 +19,9 @@ from sqlalchemy.ext.asyncio import (
 )
 from testcontainers.community.postgres import PostgresContainer
 
-from fastapi_ecommerce_api.core.db.sessions import get_db
-from fastapi_ecommerce_api.main import app
-from fastapi_ecommerce_api.uow import AppUnitOfWork, get_uow
+from ecommerce.core.db.sessions import get_db
+from ecommerce.main import app
+from ecommerce.uow import AppUnitOfWork, get_uow
 
 
 def migrate(connection: Connection) -> None:

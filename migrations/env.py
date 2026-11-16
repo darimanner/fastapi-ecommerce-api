@@ -5,9 +5,9 @@ from alembic import context
 from sqlalchemy import Connection, pool
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from fastapi_ecommerce_api.config.settings import settings
-from fastapi_ecommerce_api.core.db.model import Base
-from fastapi_ecommerce_api.modules import import_all_models
+from ecommerce.config.settings import settings
+from ecommerce.core.db.model import Base
+from ecommerce.modules import import_all_models
 
 import_all_models()
 

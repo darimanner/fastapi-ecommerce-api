@@ -10,7 +10,7 @@ The target stack: the application exports telemetry over OTLP to an OpenTelemetr
 
 ## Logging: structlog
 
-`setup_logging(level, debug=...)` in `core/observability/logging.py` configures structlog with contextvars, log level, an ISO UTC timestamp and the `mask_secrets` processor. It renders JSON by default and a colored console when `LOGGER__DEBUG=true`. Standard library loggers (uvicorn, SQLAlchemy) go through the same renderer. Code imports the shared typed logger: `from fastapi_ecommerce_api.core.observability.logging import log`. All logs are structured:
+`setup_logging(level, debug=...)` in `core/observability/logging.py` configures structlog with contextvars, log level, an ISO UTC timestamp and the `mask_secrets` processor. It renders JSON by default and a colored console when `LOGGER__DEBUG=true`. Standard library loggers (uvicorn, SQLAlchemy) go through the same renderer. Code imports the shared typed logger: `from ecommerce.core.observability.logging import log`. All logs are structured:
 
 ```python
 log.info("order.created", order_id=order.id, user_id=user.id, total=str(order.total))
@@ -27,7 +27,7 @@ A processor that walks the dict arguments and masks values by the keys `password
 ## Tracing: OpenTelemetry
 
 ```python
-# src/fastapi_ecommerce_api/core/observability/tracing.py
+# src/ecommerce/core/observability/tracing.py
 def setup_tracing(app: FastAPI) -> None:
     if not settings.telemetry.endpoint:
         return  # tracing is optional, dev can run without an OTLP collector

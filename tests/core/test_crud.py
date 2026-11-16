@@ -5,10 +5,10 @@ from pydantic import BaseModel
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from fastapi_ecommerce_api.core.crud import CRUDService
-from fastapi_ecommerce_api.core.exceptions.base import NotFoundError
-from fastapi_ecommerce_api.core.pagination.offset import OffsetParams
-from fastapi_ecommerce_api.infrastructure.unit_of_work import SQLAlchemyUnitOfWork
+from ecommerce.core.crud import CRUDService
+from ecommerce.core.exceptions.base import NotFoundError
+from ecommerce.core.pagination.offset import OffsetParams
+from ecommerce.infrastructure.unit_of_work import SQLAlchemyUnitOfWork
 from tests.core.scratch import Widget, WidgetRepository
 
 
