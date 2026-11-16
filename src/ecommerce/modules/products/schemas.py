@@ -1,9 +1,18 @@
 import datetime
-from typing import Annotated
+from typing import Annotated, Any, Literal, NamedTuple, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    TypeAdapter,
+    model_validator,
+)
 
+from ecommerce.core.exceptions.base import ValidationFailedError
+from ecommerce.core.pagination.cursor import CursorKey, CursorParams, decode_cursor
 from ecommerce.core.slug import Name, NamedSluggedCreate, Slug
 
 Description = Annotated[str, Field(max_length=5000)]
@@ -80,4 +89,79 @@ class ProductDetail(ProductRead):
     variants: list[VariantRead]
 
 
+class ProductListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    slug: str
+    brand_id: UUID | None
+    category_id: UUID
+    price: int = Field(description="Lowest price among the matching variants")
+
+
+class Position(NamedTuple):
+    price: int | None
+    id: UUID
+
+
+OptionFilter = Annotated[str, StringConstraints(pattern=r"^[^:]+:.+$", max_length=151)]
+
+
+class ProductQuery(CursorParams):
+    category_id: UUID | None = Field(None, description="Includes subcategories")
+    brand_id: UUID | None = None
+    min_price: Money | None = None
+    max_price: Money | None = None
+    option: list[OptionFilter] = Field(
+        default_factory=list,
+        max_length=10,
+        description="`name:value`; one variant must match all of them",
+    )
+    sort: Literal["newest", "price_asc", "price_desc"] = "newest"
+
+    @model_validator(mode="after")
+    def check(self) -> Self:
+        if len(self.options) < len(self.option):
+            raise ValueError("each option name may appear once")
+        low, high = self.min_price, self.max_price
+        if low is not None and high is not None and low > high:
+            raise ValueError("min_price must not exceed max_price")
+        return self
+
+    @property
+    def options(self) -> dict[str, str]:
+        pairs = (pair.partition(":") for pair in self.option)
+        return {name: value for name, _, value in pairs}
+
+    def filters(self) -> dict[str, object]:
+        """What the total depends on: no sort, limit or cursor."""
+        fields = {"category_id", "brand_id", "min_price", "max_price"}
+        return self.model_dump(include=fields) | {"options": self.options}
+
+    def after(self) -> Position | None:
+        """Decode the cursor; it must come from a page with the same sort."""
+        if self.cursor is None:
+            return None
+        price: int | None = None
+        newest = self.sort == "newest"
+        match decode_cursor(self.cursor):
+            case [str() as last_id] if newest:
+                pass
+            case [int() as price, str() as last_id] if not newest:
+                pass
+            case _:
+                raise ValidationFailedError("Invalid cursor")
+        try:
+            return Position(price, UUID(last_id))
+        except ValueError:
+            raise ValidationFailedError("Invalid cursor") from None
+
+    def cursor_key(self, row: Any) -> CursorKey:
+        if self.sort == "newest":
+            return [str(row.id)]
+        return [row.price, str(row.id)]
+
+
 variant_list = TypeAdapter(list[VariantRead])
+product_list = TypeAdapter(list[ProductListItem])

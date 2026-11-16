@@ -1,18 +1,22 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, status
+from fastapi import APIRouter, Body, Depends, Query, status
 
 from ecommerce.cache import CatalogCounts
+from ecommerce.core.pagination.cursor import CursorPage
 from ecommerce.modules.products.models import Product, ProductVariant
 from ecommerce.modules.products.schemas import (
     ProductCreate,
     ProductDetail,
+    ProductListItem,
+    ProductQuery,
     ProductRead,
     ProductUpdate,
     VariantCreate,
     VariantRead,
     VariantUpdate,
+    product_list,
 )
 from ecommerce.modules.products.service import ProductService, VariantService
 from ecommerce.uow import UoW
@@ -32,6 +36,14 @@ NewVariants = Annotated[list[VariantCreate], Body(min_length=1, max_length=100)]
 
 router = APIRouter(prefix="/products", tags=["products"])
 admin_router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+@router.get("")
+async def list_products(
+    service: Products, query: Annotated[ProductQuery, Query()]
+) -> CursorPage[ProductListItem]:
+    page, total = await service.list_public(query)
+    return CursorPage.from_slice(page, product_list, query.cursor_key, total)
 
 
 @router.get("/{product_id}", response_model=ProductDetail)

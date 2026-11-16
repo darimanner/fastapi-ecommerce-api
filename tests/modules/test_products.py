@@ -1,32 +1,11 @@
-from typing import Any
 import uuid
 
 from httpx import AsyncClient
 import pytest
 
-PRODUCTS = "/api/v1/products"
-ADMIN = "/api/v1/admin/products"
+from tests.modules.catalog import ADMIN_PRODUCTS as ADMIN, PRODUCTS, Json, post, variant
+
 VARIANTS = "/api/v1/admin/variants"
-
-type Json = dict[str, Any]
-
-
-async def post(client: AsyncClient, url: str, body: Any) -> Any:
-    response = await client.post(url, json=body)
-    assert response.status_code == 201, response.text
-    return response.json()
-
-
-@pytest.fixture
-async def brand(client: AsyncClient) -> Json:
-    data: Json = await post(client, "/api/v1/admin/brands", {"name": "Acme"})
-    return data
-
-
-@pytest.fixture
-async def category(client: AsyncClient) -> Json:
-    data: Json = await post(client, "/api/v1/admin/categories", {"name": "Shoes"})
-    return data
 
 
 @pytest.fixture
@@ -38,10 +17,6 @@ async def product(client: AsyncClient, brand: Json, category: Json) -> Json:
     }
     data: Json = await post(client, ADMIN, body)
     return data
-
-
-def variant(sku: str, price: int = 1000, **options: str) -> Json:
-    return {"sku": sku, "price": price, "stock": 5, "options": options}
 
 
 async def test_create_product_derives_slug(product: Json, brand: Json) -> None:
