@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
-from fastapi_ecommerce_api.core.observability.logging import mask_secrets
-from fastapi_ecommerce_api.main import app
+from ecommerce.core.observability.logging import mask_secrets
+from ecommerce.main import app
 
 client = TestClient(app)
 

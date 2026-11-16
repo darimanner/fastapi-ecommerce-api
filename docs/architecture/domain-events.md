@@ -15,14 +15,14 @@ Benefits:
 ## Minimal bus
 
 ```python
-# src/fastapi_ecommerce_api/core/events/base.py
+# src/ecommerce/core/events/base.py
 @dataclass(frozen=True, kw_only=True)
 class DomainEvent:
     occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     event_id: UUID = field(default_factory=uuid4)
 
 
-# src/fastapi_ecommerce_api/core/events/bus.py
+# src/ecommerce/core/events/bus.py
 type Handler[E] = Callable[[E], Awaitable[None]]
 
 
@@ -50,7 +50,7 @@ class EventBus:
 ## Events in modules
 
 ```python
-# src/fastapi_ecommerce_api/modules/orders/events.py
+# src/ecommerce/modules/orders/events.py
 @dataclass(frozen=True, kw_only=True)
 class OrderPlaced(DomainEvent):
     order_id: UUID
@@ -72,7 +72,7 @@ Events are **immutable** (`frozen=True`). They carry the **minimum data** subscr
 At application startup (lifespan):
 
 ```python
-# src/fastapi_ecommerce_api/main.py
+# src/ecommerce/main.py
 async def register_event_handlers(bus: EventBus, deps: AppDeps) -> None:
     bus.subscribe(OrderPlaced, send_order_confirmation_email(deps.email))
     bus.subscribe(OrderPlaced, decrement_inventory(deps.inventory))

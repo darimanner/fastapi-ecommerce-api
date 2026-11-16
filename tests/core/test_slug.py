@@ -1,7 +1,7 @@
 from pydantic import ValidationError
 import pytest
 
-from fastapi_ecommerce_api.core.slug import NamedSluggedCreate, slugify
+from ecommerce.core.slug import NamedSluggedCreate, slugify
 
 
 @pytest.mark.parametrize(

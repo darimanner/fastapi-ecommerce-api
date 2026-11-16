@@ -2,8 +2,8 @@ from fastapi.testclient import TestClient
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from fastapi_ecommerce_api.core.db.sessions import get_db
-from fastapi_ecommerce_api.main import app
+from ecommerce.core.db.sessions import get_db
+from ecommerce.main import app
 
 
 def test_live() -> None:

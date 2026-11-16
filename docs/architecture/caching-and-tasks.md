@@ -115,7 +115,7 @@ await send_order_confirmation_email.kiq(order.id)
 ### Running the worker
 
 ```bash
-uv run taskiq worker fastapi_ecommerce_api.core.tasks.broker:broker
+uv run taskiq worker ecommerce.core.tasks.broker:broker
 ```
 
 In production: a separate deployment in k8s, one or more pods, scaled by queue depth.

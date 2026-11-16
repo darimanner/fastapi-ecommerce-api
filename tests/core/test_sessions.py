@@ -1,5 +1,5 @@
-from fastapi_ecommerce_api.config.settings import settings
-from fastapi_ecommerce_api.core.db.sessions import engine
+from ecommerce.config.settings import settings
+from ecommerce.core.db.sessions import engine
 
 
 def test_sql_parameters_stay_out_of_errors_unless_debug() -> None:

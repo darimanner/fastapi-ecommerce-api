@@ -18,7 +18,7 @@ Change dependencies only with `uv add` / `uv remove`; never edit `uv.lock` by ha
 
 ## Layout
 
-`src/fastapi_ecommerce_api/` is a modular monolith, see [docs/architecture/structure.md](docs/architecture/structure.md):
+`src/ecommerce/` is a modular monolith, see [docs/architecture/structure.md](docs/architecture/structure.md):
 
 - `core/`: framework code (db, exceptions, pagination, observability); knows nothing about modules
 - `interfaces/`: Protocols (`Repository`, `UnitOfWork`); stdlib and Pydantic only

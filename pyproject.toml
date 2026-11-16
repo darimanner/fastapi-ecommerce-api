@@ -19,6 +19,10 @@ dependencies = [
 requires = ["uv_build>=0.13.4,<0.14"]
 build-backend = "uv_build"
 
+[tool.uv.build-backend]
+# Short import name; the distribution keeps the repository's name.
+module-name = "ecommerce"
+
 [dependency-groups]
 dev = [
     "mypy>=2.4.1",
@@ -37,7 +41,7 @@ asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 
 [tool.coverage.run]
-source = ["fastapi_ecommerce_api"]
+source = ["ecommerce"]
 branch = true
 
 [tool.coverage.report]
@@ -115,4 +119,4 @@ max-bool-expr = 3
 [tool.ruff.lint.isort]
 combine-as-imports = true
 force-sort-within-sections = true
-known-first-party = ["fastapi_ecommerce_api"]
+known-first-party = ["ecommerce"]

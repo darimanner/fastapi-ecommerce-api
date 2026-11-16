@@ -50,7 +50,7 @@ class ServiceUnavailableError(AppError):
 Modules inherit from these and only set the detail:
 
 ```python
-# src/fastapi_ecommerce_api/modules/brands/exceptions.py
+# src/ecommerce/modules/brands/exceptions.py
 class BrandNotFoundError(NotFoundError):
     def __init__(self, brand_id: UUID) -> None:
         super().__init__(f"Brand {brand_id} does not exist")
