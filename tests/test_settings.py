@@ -11,6 +11,7 @@ from ecommerce.config.settings import load_settings
         ("LOGGER__LEVEL", "LOUD"),
         ("DATABASE__URL", "postgresql://u:p@localhost/db"),
         ("CATALOG__MAX_CATEGORY_DEPTH", "0"),
+        ("REDIS__URL", "http://localhost:6379"),
     ],
 )
 def test_invalid_env_exits_with_variable_name(

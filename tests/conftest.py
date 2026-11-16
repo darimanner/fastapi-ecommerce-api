@@ -1,7 +1,9 @@
 import os
 
-# Settings are read at import time; tests override get_db, so this URL is never used.
+# Settings are read at import time; tests override get_db and get_redis, so these
+# URLs are never used.
 os.environ.setdefault("DATABASE__URL", "postgresql+asyncpg://test:test@localhost/test")
+os.environ.setdefault("REDIS__URL", "redis://localhost:6379/0")
 
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
@@ -10,6 +12,7 @@ from alembic import command
 from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
 import pytest
+from redis.asyncio import Redis
 from sqlalchemy import Connection
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -18,8 +21,10 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from testcontainers.community.postgres import PostgresContainer
+from testcontainers.community.redis import RedisContainer
 
 from ecommerce.core.db.sessions import get_db
+from ecommerce.core.redis import get_redis
 from ecommerce.main import app
 from ecommerce.uow import AppUnitOfWork, get_uow
 
@@ -35,6 +40,21 @@ def migrate(connection: Connection) -> None:
 def postgres_url() -> Iterator[str]:
     with PostgresContainer("postgres:18-alpine", driver="asyncpg") as postgres:
         yield postgres.get_connection_url()
+
+
+@pytest.fixture(scope="session")
+def redis_url() -> Iterator[str]:
+    with RedisContainer("redis:8-alpine") as container:
+        host, port = container.get_container_host_ip(), container.get_exposed_port(6379)
+        yield f"redis://{host}:{port}/0"
+
+
+@pytest.fixture
+async def redis(redis_url: str) -> AsyncIterator[Redis]:
+    client = Redis.from_url(redis_url)
+    await client.flushdb()
+    yield client
+    await client.aclose()
 
 
 @pytest.fixture(scope="session")
@@ -69,10 +89,13 @@ async def db_session(
 
 @pytest.fixture
 async def client(
-    db_session: AsyncSession, session_factory: async_sessionmaker[AsyncSession]
+    db_session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    redis: Redis,
 ) -> AsyncIterator[AsyncClient]:
     app.dependency_overrides[get_db] = lambda: db_session
     app.dependency_overrides[get_uow] = lambda: AppUnitOfWork(session_factory)
+    app.dependency_overrides[get_redis] = lambda: redis
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
     app.dependency_overrides.clear()
