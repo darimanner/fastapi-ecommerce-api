@@ -1,11 +1,21 @@
-from typing import Any
+from collections.abc import Awaitable, Callable, Mapping
+from typing import Any, Self
+import uuid
 
 from httpx import AsyncClient
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from ecommerce.core.counts import VersionedCounts
+from ecommerce.core.pagination.cursor import encode_cursor
 from ecommerce.modules.products.models import Product, ProductVariant
+from ecommerce.modules.products.schemas import ProductQuery
+from ecommerce.modules.products.service import ProductService
+from ecommerce.uow import AppUnitOfWork
 from tests.modules.catalog import ADMIN_PRODUCTS, PRODUCTS, Json, post, variant
+
+VARIANTS = "/api/v1/admin/variants"
 
 
 class Shop:
@@ -152,6 +162,8 @@ async def test_keyset_walk_visits_every_product_once(
         {"option": "size"},
         {"min_price": 5, "max_price": 4},
         {"min_price": -1},
+        {"min_price": 2**31},
+        {"cursor": encode_cursor([2**31, str(uuid.uuid7())]), "sort": "price_asc"},
         {"sort": "name"},
     ],
     ids=[
@@ -160,6 +172,8 @@ async def test_keyset_walk_visits_every_product_once(
         "option without value",
         "min > max",
         "negative price",
+        "price above int32",
+        "cursor price above int32",
         "unknown sort",
     ],
 )
@@ -200,10 +214,83 @@ async def test_category_move_refreshes_the_total(shop: Shop) -> None:
     shoes = {"category_id": shop.refs["Shoes"]}
     before = await shop.list(**shoes)
 
-    await shop.client.patch(
+    moved = await shop.client.patch(
         f"/api/v1/admin/categories/{shop.refs['Hats']}",
         json={"parent_id": shop.refs["Shoes"]},
     )
     after = await shop.list(**shoes)
 
+    assert moved.status_code == 200
     assert (before["total"], after["total"]) == (2, 3)
+
+
+async def variant_id(shop: Shop, product: str) -> str:
+    detail = (await shop.client.get(f"{PRODUCTS}/{shop.ids[product]}")).json()
+    found: str = detail["variants"][0]["id"]
+    return found
+
+
+@pytest.mark.parametrize(
+    "write", ["variant price", "variant delete", "product deactivate", "product delete"]
+)
+async def test_every_catalog_write_refreshes_the_total(shop: Shop, write: str) -> None:
+    cheap = {"max_price": 3000}
+    before = await shop.list(**cheap)
+    trail = f"{ADMIN_PRODUCTS}/{shop.ids['Trail']}"
+
+    if write == "variant price":
+        url = f"{VARIANTS}/{await variant_id(shop, 'Trail')}"
+        response = await shop.client.patch(url, json={"price": 9000})
+    elif write == "variant delete":
+        response = await shop.client.delete(
+            f"{VARIANTS}/{await variant_id(shop, 'Trail')}"
+        )
+    elif write == "product deactivate":
+        response = await shop.client.patch(trail, json={"is_active": False})
+    else:
+        response = await shop.client.delete(trail)
+    after = await shop.list(**cheap)
+
+    assert response.status_code in {200, 204}
+    # Trail (3000) drops out of the cheap filter either way; Cap stays.
+    assert (before["total"], after["total"]) == (2, 1)
+
+
+class TrackingUoW(AppUnitOfWork):
+    """Counts open sessions, i.e. pooled connections this request holds."""
+
+    open = 0
+
+    async def __aenter__(self) -> Self:
+        self.open += 1
+        return await super().__aenter__()
+
+    async def __aexit__(self, *exc: Any) -> None:
+        await super().__aexit__(*exc)
+        self.open -= 1
+
+
+class SpyCounts(VersionedCounts):
+    def __init__(self, redis: Redis, uow: TrackingUoW) -> None:
+        super().__init__(redis, "catalog")
+        self.uow = uow
+        self.open_during: list[int] = []
+
+    async def get_or_count(
+        self, filters: Mapping[str, object], count: Callable[[], Awaitable[int]]
+    ) -> int | None:
+        # A hung Redis must not pin a DB connection: no session open around it.
+        self.open_during.append(self.uow.open)
+        return await super().get_or_count(filters, count)
+
+
+@pytest.mark.usefixtures("shop")
+async def test_count_cache_is_used_without_holding_a_session(
+    session_factory: async_sessionmaker[AsyncSession], redis: Redis
+) -> None:
+    uow = TrackingUoW(session_factory)
+    counts = SpyCounts(redis, uow)
+
+    _, total = await ProductService(uow, counts).list_public(ProductQuery())
+
+    assert (total, counts.open_during) == (3, [0])

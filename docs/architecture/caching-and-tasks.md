@@ -10,7 +10,9 @@ The storefront product listing returns an exact `total` without `count(*)` per p
 
 - Key: `counts:<namespace>:<version>:<sha256 of the filters>`, TTL one hour. Sort, limit and cursor are not part of the filters, so every page of one listing shares a total.
 - Invalidation: `bump()` runs `INCR counts:<namespace>:version` after every commit that can change a total. Old keys are never read again and expire by TTL; there is no `SCAN`/`DEL` over patterns.
-- Order: the version is read before the count query. If a write commits after that read, its bump retires the key, so a total that misses the write is never served after the write is visible.
+- Order: the version is read before the count query. If a write commits after that read, its bump retires the key, so a total that misses the write is never served once the bump has run. Between a commit and its bump (one Redis round trip) the old total may still be served.
+- Connections: the cache is read and written outside the Unit of Work; only a cache miss opens a session, for the count query itself. A slow Redis never pins a pooled database connection.
+- Key space: every distinct filter set is a key, so a client walking many price ranges creates many short-lived keys and count queries. The TTL bounds the memory; rate limiting (planned) bounds the queries.
 - Writers: `CRUDService._after_write()` bumps for products, variants and categories (a category move changes which products a category filter covers). The services get the `catalog` instance through `CatalogCounts` (`src/ecommerce/cache.py`), so modules share a namespace without importing each other.
 - Redis down: reads return `total: null` (the page itself still works), a failed bump logs `counts.bump_failed` and totals may be stale for up to the TTL. The client has 1 s socket timeouts, so a hung Redis slows a request instead of hanging it.
 

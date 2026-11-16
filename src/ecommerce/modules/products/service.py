@@ -49,10 +49,15 @@ class ProductService(CRUDService[Product, ProductCreate, ProductUpdate]):
     async def list_public(self, query: ProductQuery) -> tuple[Slice[Any], int | None]:
         async with self._catalog_uow as uow:
             page = await uow.products.list_public(query)
-            total = await self._counts.get_or_count(
-                query.filters(), lambda: uow.products.count_public(query)
-            )
+        # Outside the UoW: a slow Redis must not pin a pooled DB connection.
+        total = await self._counts.get_or_count(
+            query.filters(), lambda: self._count_public(query)
+        )
         return page, total
+
+    async def _count_public(self, query: ProductQuery) -> int:
+        async with self._catalog_uow as uow:
+            return await uow.products.count_public(query)
 
     async def _after_write(self) -> None:
         await self._counts.bump()

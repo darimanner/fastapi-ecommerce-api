@@ -19,11 +19,14 @@ Description = Annotated[str, Field(max_length=5000)]
 Sku = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=64)
 ]
-Money = Annotated[int, Field(ge=0, description="Minor units (cents)")]
-Stock = Annotated[int, Field(ge=0)]
+# The columns are INTEGER: a larger value would be a DataError (500), not a 422.
+INT32_MAX = 2**31 - 1
+Money = Annotated[int, Field(ge=0, le=INT32_MAX, description="Minor units (cents)")]
+Stock = Annotated[int, Field(ge=0, le=INT32_MAX)]
 Options = Annotated[
     dict[
-        Annotated[str, StringConstraints(min_length=1, max_length=50)],
+        # No colon: the listing filter splits `name:value` on the first one.
+        Annotated[str, StringConstraints(pattern=r"^[^:]+$", max_length=50)],
         Annotated[str, StringConstraints(min_length=1, max_length=100)],
     ],
     Field(max_length=10),
@@ -148,7 +151,9 @@ class ProductQuery(CursorParams):
         match decode_cursor(self.cursor):
             case [str() as last_id] if newest:
                 pass
-            case [int() as price, str() as last_id] if not newest:
+            case [int() as price, str() as last_id] if (
+                not newest and 0 <= price <= INT32_MAX
+            ):
                 pass
             case _:
                 raise ValidationFailedError("Invalid cursor")

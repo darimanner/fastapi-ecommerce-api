@@ -90,8 +90,19 @@ async def test_duplicate_variant_is_409(
         {"sku": "A", "price": 1, "stock": -1},
         {"sku": " ", "price": 1},
         {"sku": "A", "price": 1, "options": {"": "x"}},
+        {"sku": "A", "price": 1, "options": {"a:b": "x"}},
+        variant("A", price=2**31),
+        {"sku": "A", "price": 1, "stock": 2**31},
     ],
-    ids=["negative price", "negative stock", "blank sku", "empty option name"],
+    ids=[
+        "negative price",
+        "negative stock",
+        "blank sku",
+        "empty option name",
+        "colon in option name",
+        "price above int32",
+        "stock above int32",
+    ],
 )
 async def test_invalid_variant_is_422(
     client: AsyncClient, product: Json, bad: Json

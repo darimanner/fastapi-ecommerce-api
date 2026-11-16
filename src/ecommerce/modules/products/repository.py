@@ -11,6 +11,7 @@ from sqlalchemy import (
     func,
     select,
     table,
+    true,
     tuple_,
 )
 from sqlalchemy.orm import selectinload
@@ -68,13 +69,17 @@ class VariantRepository(SQLAlchemyRepository[ProductVariant]):
 
 def _public(query: ProductQuery) -> Select[Any]:
     """Active products with a matching variant, priced at the cheapest one."""
-    prices = select(
-        ProductVariant.product_id, func.min(ProductVariant.price).label("price")
-    ).group_by(ProductVariant.product_id)
+    # LATERAL, not GROUP BY over all variants: a page only prices the products it reads.
+    prices = select(func.min(ProductVariant.price).label("price")).where(
+        ProductVariant.product_id == Product.id
+    )
     if query.options:
         prices = prices.where(ProductVariant.options.contains(query.options))
-    lowest = prices.subquery()
-    conditions: list[ColumnElement[bool]] = [Product.is_active.is_(True)]
+    lowest = prices.lateral("lowest")
+    conditions: list[ColumnElement[bool]] = [
+        Product.is_active.is_(True),
+        lowest.c.price.is_not(None),  # min() over no matching variants
+    ]
     if query.brand_id is not None:
         conditions.append(Product.brand_id == query.brand_id)
     if query.category_id is not None:
@@ -92,7 +97,8 @@ def _public(query: ProductQuery) -> Select[Any]:
             Product.category_id,
             lowest.c.price,
         )
-        .join(lowest, lowest.c.product_id == Product.id)
+        .select_from(Product)
+        .join(lowest, true())
         .where(*conditions)
     )
 

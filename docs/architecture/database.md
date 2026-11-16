@@ -35,7 +35,7 @@ Money is an `int` in minor units (cents) of the one store currency, never `float
 - `products`: `brand_id` (nullable) and `category_id` are indexed FKs without an ON DELETE action, so deleting a brand or category that still has products is a 409.
 - `product_variants`: `sku` unique, `price` and `stock` with `CHECK >= 0`, `options` JSONB (`{"size": "M"}`) with `UNIQUE (product_id, options)` and a GIN index for `@>` filters, see [ADR-0005](../adr/0005-variant-options-jsonb.md). `product_id` is `ON DELETE CASCADE`: variants are part of the product.
 
-The public listing (`ProductRepository.list_public`) joins products to a per-product `min(price)` over the variants that match the option filter, so the price filters and sorts apply to the lowest matching price. The category filter walks the subtree with a recursive CTE over a bare `table("categories", ...)`, so the products module never imports the categories module.
+The public listing (`ProductRepository.list_public`) joins each product to a `LATERAL` `min(price)` over its variants that match the option filter (served by the `(product_id, options)` index), so the price filters and sorts apply to the lowest matching price, and a `newest` page prices only the rows it reads instead of aggregating the whole variants table. Prices and stock are capped at the `INTEGER` range in the schemas, so an oversized value is a 422, not a database error. The category filter walks the subtree with a recursive CTE over a bare `table("categories", ...)`, so the products module never imports the categories module.
 
 ## Mixins
 
