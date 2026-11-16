@@ -1,11 +1,9 @@
 from uuid import UUID
 
-from sqlalchemy import func, literal, select
+from sqlalchemy import func, literal, select, text
 
 from fastapi_ecommerce_api.infrastructure.repository import SQLAlchemyRepository
 from fastapi_ecommerce_api.modules.categories.models import Category
-
-TREE_LOCK_KEY = 0x6361745F74726565  # "cat_tree"
 
 
 class CategoryRepository(SQLAlchemyRepository[Category]):
@@ -13,7 +11,10 @@ class CategoryRepository(SQLAlchemyRepository[Category]):
 
     async def lock_tree(self) -> None:
         """Serialize tree moves until commit: two checks cannot pass on stale reads."""
-        await self.session.execute(select(func.pg_advisory_xact_lock(TREE_LOCK_KEY)))
+        # Keyed by the table's OID: unique per database, no hand-picked number.
+        await self.session.execute(
+            text("SELECT pg_advisory_xact_lock('categories'::regclass::oid::bigint)")
+        )
 
     async def refresh_parent(self, category: Category) -> None:
         await self.session.refresh(category, ["parent_id"])
