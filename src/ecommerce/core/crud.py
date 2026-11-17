@@ -35,6 +35,7 @@ class CRUDService[ModelT, CreateT: BaseModel, UpdateT: BaseModel]:
             repository = self._repository()
             entity = await repository.add(repository.model(**values))
             await self._uow.commit()
+        await self._after_write()
         return entity
 
     async def replace(self, entity_id: UUID, data: CreateT) -> ModelT:
@@ -47,9 +48,13 @@ class CRUDService[ModelT, CreateT: BaseModel, UpdateT: BaseModel]:
         async with self._uow:
             await self._repository().delete(await self._get(entity_id))
             await self._uow.commit()
+        await self._after_write()
 
     async def _before_write(self, entity: ModelT | None, values: dict[str, Any]) -> None:
         """Runs inside the write transaction; `entity` is None on create."""
+
+    async def _after_write(self) -> None:
+        """Runs after a successful commit, e.g. to invalidate caches."""
 
     async def _write(self, entity_id: UUID, values: dict[str, Any]) -> ModelT:
         async with self._uow:
@@ -57,6 +62,7 @@ class CRUDService[ModelT, CreateT: BaseModel, UpdateT: BaseModel]:
             await self._before_write(entity, values)
             await self._repository().update(entity, values)
             await self._uow.commit()
+        await self._after_write()
         return entity
 
     async def _get(self, entity_id: UUID) -> ModelT:

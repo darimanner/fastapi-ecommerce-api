@@ -6,10 +6,12 @@ import uuid
 
 from httpx import AsyncClient
 import pytest
+from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from ecommerce.config.settings import settings
+from ecommerce.core.counts import VersionedCounts
 from ecommerce.modules.categories.exceptions import CategoryCycleError
 from ecommerce.modules.categories.models import Category
 from ecommerce.modules.categories.schemas import (
@@ -155,8 +157,10 @@ async def test_delete_with_children_is_409_and_leaf_is_204(client: AsyncClient) 
 class RacingService(CategoryService):
     """Holds its transaction after the guard until the other move has checked too."""
 
-    def __init__(self, uow: AppUnitOfWork, barrier: asyncio.Barrier) -> None:
-        super().__init__(uow, max_depth=5)
+    def __init__(
+        self, uow: AppUnitOfWork, counts: VersionedCounts, barrier: asyncio.Barrier
+    ) -> None:
+        super().__init__(uow, max_depth=5, counts=counts)
         self._barrier = barrier
 
     async def _before_write(
@@ -173,9 +177,12 @@ class StaleReadService(CategoryService):
     """Another admin moves the node right after this request has read it."""
 
     def __init__(
-        self, uow: AppUnitOfWork, concurrent_move: Callable[[], Awaitable[object]]
+        self,
+        uow: AppUnitOfWork,
+        counts: VersionedCounts,
+        concurrent_move: Callable[[], Awaitable[object]],
     ) -> None:
-        super().__init__(uow, max_depth=5)
+        super().__init__(uow, max_depth=5, counts=counts)
         self._concurrent_move = concurrent_move
 
     async def _before_write(
@@ -186,9 +193,12 @@ class StaleReadService(CategoryService):
 
 
 @pytest.fixture
-async def committed(engine: AsyncEngine) -> AsyncIterator[CommittedTree]:
+async def committed(engine: AsyncEngine, redis: Redis) -> AsyncIterator[CommittedTree]:
     # Real commits on separate connections: the savepoint fixtures share one.
-    tree = CommittedTree(async_sessionmaker(engine, expire_on_commit=False))
+    tree = CommittedTree(
+        async_sessionmaker(engine, expire_on_commit=False),
+        VersionedCounts(redis, "catalog"),
+    )
     yield tree
     async with engine.begin() as conn:
         ids = {"ids": tree.ids}
@@ -199,12 +209,18 @@ async def committed(engine: AsyncEngine) -> AsyncIterator[CommittedTree]:
 
 
 class CommittedTree:
-    def __init__(self, factory: async_sessionmaker[AsyncSession]) -> None:
+    def __init__(
+        self, factory: async_sessionmaker[AsyncSession], counts: VersionedCounts
+    ) -> None:
         self.factory = factory
+        self.counts = counts
         self.ids: list[uuid.UUID] = []
 
+    def uow(self) -> AppUnitOfWork:
+        return AppUnitOfWork(self.factory)
+
     def service(self) -> CategoryService:
-        return CategoryService(AppUnitOfWork(self.factory), max_depth=5)
+        return CategoryService(self.uow(), max_depth=5, counts=self.counts)
 
     async def create(self, parent: Category | None = None) -> Category:
         category = await self.service().create(
@@ -220,13 +236,12 @@ async def test_concurrent_cross_moves_cannot_build_a_cycle(
     a, b = await committed.create(), await committed.create()
     barrier = asyncio.Barrier(2)
 
+    def racer() -> RacingService:
+        return RacingService(committed.uow(), committed.counts, barrier)
+
     results = await asyncio.gather(
-        RacingService(AppUnitOfWork(committed.factory), barrier).update(
-            a.id, CategoryUpdate(parent_id=b.id)
-        ),
-        RacingService(AppUnitOfWork(committed.factory), barrier).update(
-            b.id, CategoryUpdate(parent_id=a.id)
-        ),
+        racer().update(a.id, CategoryUpdate(parent_id=b.id)),
+        racer().update(b.id, CategoryUpdate(parent_id=a.id)),
         return_exceptions=True,
     )
 
@@ -244,7 +259,7 @@ async def test_move_is_checked_against_the_committed_parent(
     def other_admin_moves_node() -> Awaitable[Category]:
         return committed.service().update(node.id, CategoryUpdate(parent_id=second.id))
 
-    service = StaleReadService(AppUnitOfWork(committed.factory), other_admin_moves_node)
+    service = StaleReadService(committed.uow(), committed.counts, other_admin_moves_node)
     moved = await service.update(node.id, CategoryUpdate(parent_id=first.id))
     stored = await committed.service().get(node.id)
 

@@ -1,6 +1,13 @@
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, PostgresDsn, UrlConstraints, ValidationError
+from pydantic import (
+    BaseModel,
+    Field,
+    PostgresDsn,
+    RedisDsn,
+    UrlConstraints,
+    ValidationError,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,6 +24,10 @@ class DatabaseSettings(BaseModel):
     url: Annotated[PostgresDsn, UrlConstraints(allowed_schemes=["postgresql+asyncpg"])]
 
 
+class RedisSettings(BaseModel):
+    url: RedisDsn
+
+
 class CatalogSettings(BaseModel):
     max_category_depth: int = Field(5, ge=1)
 
@@ -31,6 +42,7 @@ class Settings(BaseSettings):
     catalog: CatalogSettings = CatalogSettings()
     # Validating an empty default reports DATABASE__URL instead of DATABASE.
     database: DatabaseSettings = Field(default_factory=dict, validate_default=True)
+    redis: RedisSettings = Field(default_factory=dict, validate_default=True)
 
 
 def load_settings() -> Settings:

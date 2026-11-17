@@ -22,6 +22,7 @@ class CursorParams(BaseModel):
 class CursorPage[T](BaseModel):
     items: list[T]
     next_cursor: str | None
+    total: int | None = None
 
     @classmethod
     def from_slice(
@@ -29,10 +30,11 @@ class CursorPage[T](BaseModel):
         slice_: Slice[Any],
         adapter: TypeAdapter[list[T]],
         key: Callable[[Any], CursorKey],
+        total: int | None = None,
     ) -> CursorPage[T]:
         items = adapter.validate_python(slice_.items, from_attributes=True)
         next_cursor = encode_cursor(key(slice_.items[-1])) if slice_.has_next else None
-        return cls.model_construct(items=items, next_cursor=next_cursor)
+        return cls.model_construct(items=items, next_cursor=next_cursor, total=total)
 
 
 def encode_cursor(values: CursorKey) -> str:

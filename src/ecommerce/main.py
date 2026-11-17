@@ -9,14 +9,17 @@ from ecommerce.core.db.sessions import engine
 from ecommerce.core.exceptions.handlers import register_exception_handlers
 from ecommerce.core.observability.logging import setup_logging
 from ecommerce.core.observability.middleware import request_context
+from ecommerce.core.redis import redis_client
 from ecommerce.modules.brands import router as brands
 from ecommerce.modules.categories import router as categories
+from ecommerce.modules.products import router as products
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     yield
     await engine.dispose()
+    await redis_client.aclose()
 
 
 def create_app() -> FastAPI:
@@ -30,6 +33,8 @@ def create_app() -> FastAPI:
         brands.admin_router,
         categories.router,
         categories.admin_router,
+        products.router,
+        products.admin_router,
     )
     for router in routers:
         app.include_router(router, prefix="/api/v1")

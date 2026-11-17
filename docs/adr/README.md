@@ -30,6 +30,7 @@ Not every decision is an ADR. There is no need for an ADR for "chose PyJWT over 
 - [0002 - UUIDv7 primary keys](0002-uuid7-primary-keys.md)
 - [0003 - Pagination without count(*)](0003-pagination-without-count.md)
 - [0004 - Category tree as an adjacency list with a locked guard](0004-category-tree-adjacency-list.md)
+- [0005 - Variant options as JSONB](0005-variant-options-jsonb.md)
 
 ## Candidates
 

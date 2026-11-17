@@ -6,10 +6,10 @@ Production-grade e-commerce REST API on FastAPI, SQLAlchemy 2 (async) and Postgr
 
 ```bash
 make install   # uv sync + pre-commit hooks
-make up        # PostgreSQL in Docker
+make up        # PostgreSQL and Redis in Docker
 make migrate   # alembic upgrade head
 make run       # dev server on http://127.0.0.1:8000
-make test      # pytest on testcontainers PostgreSQL, fails below 85% coverage (Docker required)
+make test      # pytest on testcontainers PostgreSQL and Redis, fails below 85% coverage (Docker required)
 make check     # pre-commit: ruff, mypy --strict, uv lock check
 make revision m="add brands"   # autogenerate a migration
 ```

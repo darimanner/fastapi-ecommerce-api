@@ -29,7 +29,7 @@ The usual paginated response carries `total`, computed with `SELECT count(*)` ne
 
 **Neutral:**
 
-- Response models: `Page[T]` (`items`, `has_next`, optional `total`) and `CursorPage[T]` (`items`, `next_cursor`)
+- Response models: `Page[T]` (`items`, `has_next`, optional `total`) and `CursorPage[T]` (`items`, `next_cursor`, optional `total`)
 
 ## Alternatives Considered
 
