@@ -93,9 +93,11 @@ New revision files are formatted with ruff automatically.
 
 ```bash
 docker build -t fastapi-ecommerce-api .
-docker run --rm -e DATABASE__URL=... fastapi-ecommerce-api alembic upgrade head
-docker run -p 8000:8000 -e DATABASE__URL=... fastapi-ecommerce-api
+docker run --rm -e DATABASE__URL=... -e REDIS__URL=... -e AUTH__SECRET_KEY=... fastapi-ecommerce-api alembic upgrade head
+docker run -p 8000:8000 -e DATABASE__URL=... -e REDIS__URL=... -e AUTH__SECRET_KEY=... fastapi-ecommerce-api
 ```
+
+Settings are loaded in full, also by `alembic upgrade head`, and `.dockerignore` excludes `.env`, so all three variables must be passed.
 
 The image runs as a non-root user and does not migrate on startup: run migrations as a separate deploy step.
 

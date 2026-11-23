@@ -2,7 +2,7 @@
 
 > Status: partially implemented
 
-Authentication is built. Authorization (RBAC), security headers, the audit trail and idempotency are planned; their sections below are design only and are marked so.
+Authentication is built. Authorization (RBAC), security headers, CORS, rate limiting, dependency vulnerability scanning, the audit trail and idempotency are planned; their sections below are design only and are marked so.
 
 ## Authentication
 
@@ -37,6 +37,13 @@ Redis errors map to 503 through the global handler: authentication fails closed 
 - A ban (`is_active = false`) or a role change applies at the next refresh, not immediately. `GET /users/me` does not check `is_active`.
 - If the database or Redis fails right after `GETDEL`, the old refresh token is already spent and the user logs in again.
 - Refresh token reuse detection (revoking the whole token family when a spent token is replayed) is not built.
+- There is no rate limit on login and register until the rate limiting stage. Each attempt costs one argon2 hash (about 64 MiB of memory, run in the default thread pool).
+
+### CSRF and enumeration
+
+Refresh and logout read a cookie, so CSRF applies. The cookie is `SameSite=Strict`, the app has no CORS middleware, and a cross-origin page cannot read the token response. A same-site sibling origin could at most trigger a rotation or a logout, which is a nuisance only.
+
+Register answers 409 for a taken email, so it reveals that the email is registered. The dummy hash only equalizes login timing; it does not hide existence at registration.
 
 ### Password hashing: Argon2id
 
@@ -104,6 +111,8 @@ CSP `default-src 'none'` suits a pure API (no HTML). The admin UI and Swagger UI
 
 ## CORS
 
+> Status: planned
+
 Standard FastAPI middleware configured from `cors_origins` in the application settings (`config/settings.py`). **Do not use `*`** in production: use an explicit list of origins. Credentials are allowed only with an explicit list.
 
 ## Secrets Management
@@ -117,6 +126,8 @@ Never log secrets: a structlog processor masks the keys `password|secret|token|a
 
 ## Rate Limiting
 
+> Status: planned
+
 See [Rate Limiting](rate-limiting.md). Applied globally, with stricter limits on auth endpoints (login: 5/min, register: 3/hour).
 
 ## Input Validation
@@ -129,12 +140,14 @@ See [Rate Limiting](rate-limiting.md). Applied globally, with stricter limits on
 
 ## Sensitive Data in Models
 
-Fields such as `password_hash`:
-- `repr=False` in the SQLAlchemy mapper, so they do not end up in `__repr__`
-- Not included in Pydantic Read schemas
-- Separate `UserPublicRead` (no secrets) and `UserAdminRead` (with email, etc.) for different contexts
+`password_hash` never leaves the service:
+- `UserRead` has no `password_hash`, and tests assert it is absent from responses
+- The models use the default SQLAlchemy `__repr__` (`core/db/model.py` does not override it), which prints no column values
+- Separate public and admin user read schemas are planned
 
 ## Dependency Vulnerabilities
+
+> Status: planned
 
 CI runs `pip-audit` (or `uv audit` once it stabilizes) and fails on known CVEs.
 

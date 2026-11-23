@@ -12,7 +12,7 @@ The API needs authentication for browser and API clients. Most requests are read
 - The access token is a short-lived (15 minutes) JWT, HS256, with `sub`, `role`, `jti`, `type`, `iat` and `exp`. It is verified from the signature alone, with no database or Redis call.
 - The refresh token is a JWT (30 days) whose `jti` is stored in Redis as `auth:refresh:<jti>` with the same TTL. It lives in an HttpOnly, `SameSite=Strict` cookie scoped to `/api/v1/auth`.
 - Refresh is rotation: the key is consumed with `GETDEL` before anything else, then a new pair is issued. Logout deletes the key.
-- If Redis is unavailable, auth endpoints return 503 (fail closed).
+- If Redis is unavailable, login, refresh and logout return 503 (fail closed).
 
 ## Consequences
 

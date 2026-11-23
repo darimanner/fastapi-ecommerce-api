@@ -2,7 +2,7 @@
 
 > Status: partially implemented
 >
-> Implemented: the exception hierarchy, RFC 7807 handlers and database error mapping below. Planned: `UnauthorizedError`, `ForbiddenError` and `RateLimitedError`, added with auth and rate limiting.
+> Implemented: the exception hierarchy, RFC 7807 handlers and database error mapping below. Planned: `RateLimitedError`, added with rate limiting.
 
 ## Principles
 
@@ -20,11 +20,23 @@
 class AppError(Exception):
     status_code = 500
     title = "Internal Server Error"
+    headers: ClassVar[Mapping[str, str]] = {}  # added to the response
 
     def __init__(self, detail: str | None = None, **extra: object) -> None:
         self.detail = detail or self.title
         self.extra = extra
         super().__init__(self.detail)
+
+
+class UnauthorizedError(AppError):
+    status_code = 401
+    title = "Unauthorized"
+    headers: ClassVar[Mapping[str, str]] = {"WWW-Authenticate": "Bearer"}
+
+
+class ForbiddenError(AppError):
+    status_code = 403
+    title = "Forbidden"
 
 
 class NotFoundError(AppError):
@@ -93,6 +105,7 @@ All HTTP errors share one format with the media type `application/problem+json`.
 |-----------|---------|----------|
 | `AppError` | `app_error_handler` | its status, title, detail and extension members |
 | `IntegrityError` | `integrity_error_handler` | mapped by `map_integrity_error`, see below |
+| `RedisError` | `redis_error_handler` | 503 |
 | `HTTPException` | `http_error_handler` | its status with the standard phrase as title |
 | `RequestValidationError` | `validation_error_handler` | 422 with `errors[]` |
 | any other exception | `unexpected_error_handler` (called by the request middleware) | generic 500 |
