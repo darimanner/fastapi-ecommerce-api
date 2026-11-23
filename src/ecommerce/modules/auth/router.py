@@ -6,6 +6,7 @@ from ecommerce.config.settings import settings
 from ecommerce.core.exceptions.base import UnauthorizedError
 from ecommerce.core.redis import RedisClient
 from ecommerce.core.security.tokens import Token
+from ecommerce.modules.auth.deps import CurrentUser
 from ecommerce.modules.auth.models import User
 from ecommerce.modules.auth.schemas import (
     LoginRequest,
@@ -42,6 +43,15 @@ def _set_refresh_cookie(response: Response, token: Token) -> None:
         httponly=True,
         samesite="strict",
     )
+
+
+users_router = APIRouter(prefix="/users", tags=["users"])
+
+
+@users_router.get("/me")
+async def me(service: Service, principal: CurrentUser) -> UserRead:
+    # Stateless token: is_active is not rechecked, a ban applies at the next refresh.
+    return UserRead.model_validate(await service.get_user(principal.id))
 
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)

@@ -87,6 +87,13 @@ class AuthService:
             return  # a dead token is already logged out
         await self._redis.delete(_refresh_key(claims["jti"]))
 
+    async def get_user(self, user_id: UUID) -> User:
+        async with self._uow:
+            user = await self._uow.users.get(user_id)
+        if user is None:
+            raise UnauthorizedError("Invalid or expired token")
+        return user
+
     async def _issue(self, user: User) -> TokenPair:
         auth = settings.auth
         access = issue_token(user.id, "access", auth.access_ttl, role=user.role)

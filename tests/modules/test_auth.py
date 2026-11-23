@@ -1,5 +1,7 @@
 import asyncio
+from datetime import timedelta
 from typing import Any
+import uuid
 
 from httpx import AsyncClient, Response
 import pytest
@@ -9,7 +11,7 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ecommerce.core.security.passwords import DUMMY_HASH, verify_password
-from ecommerce.core.security.tokens import decode_token
+from ecommerce.core.security.tokens import decode_token, issue_token
 from ecommerce.modules.auth import service
 from ecommerce.modules.auth.models import Role, User
 
@@ -17,6 +19,7 @@ REGISTER = "/api/v1/auth/register"
 LOGIN = "/api/v1/auth/login"
 REFRESH = "/api/v1/auth/refresh"
 LOGOUT = "/api/v1/auth/logout"
+ME = "/api/v1/users/me"
 EMAIL = "ann@example.com"
 PASSWORD = "correct horse"  # noqa: S105  test fixture value
 COOKIE_ATTRIBUTES = ("HttpOnly", "Secure", "SameSite=strict", "Path=/api/v1/auth")
@@ -242,3 +245,59 @@ async def test_login_fails_closed_when_redis_is_down(
 
     assert response.status_code == 503
     assert "set-cookie" not in response.headers
+
+
+def bearer(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+async def test_me_returns_the_current_user(
+    client: AsyncClient, signed_in: Response
+) -> None:
+    response = await client.get(ME, headers=bearer(signed_in.json()["access_token"]))
+
+    assert response.status_code == 200, response.text
+    assert response.json()["email"] == EMAIL
+
+
+async def test_me_without_a_token_is_unauthorized(client: AsyncClient) -> None:
+    response = await client.get(ME)
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+async def test_me_rejects_a_refresh_token(
+    client: AsyncClient, signed_in: Response
+) -> None:
+    response = await client.get(ME, headers=bearer(client.cookies["refresh_token"]))
+
+    assert response.status_code == 401
+
+
+async def test_me_for_a_deleted_user_is_unauthorized(client: AsyncClient) -> None:
+    token = issue_token(uuid.uuid7(), "access", timedelta(minutes=5), role="customer")
+
+    response = await client.get(ME, headers=bearer(token.value))
+
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize(
+    ("ttl", "claims"),
+    [
+        (timedelta(seconds=-1), {"role": "customer"}),
+        (timedelta(minutes=5), {"role": "root"}),
+        (timedelta(minutes=5), {}),
+    ],
+    ids=["expired", "unknown-role", "missing-role"],
+)
+async def test_me_rejects_bad_access_tokens(
+    client: AsyncClient, signed_in: Response, ttl: timedelta, claims: dict[str, str]
+) -> None:
+    sub = decode_token(signed_in.json()["access_token"], "access")["sub"]
+    token = issue_token(uuid.UUID(sub), "access", ttl, **claims)
+
+    response = await client.get(ME, headers=bearer(token.value))
+
+    assert response.status_code == 401

@@ -31,6 +31,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     routers = (
         auth.router,
+        auth.users_router,
         brands.router,
         brands.admin_router,
         categories.router,
