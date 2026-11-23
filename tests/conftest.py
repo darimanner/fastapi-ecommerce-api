@@ -97,6 +97,8 @@ async def client(
     app.dependency_overrides[get_db] = lambda: db_session
     app.dependency_overrides[get_uow] = lambda: AppUnitOfWork(session_factory)
     app.dependency_overrides[get_redis] = lambda: redis
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="https://test"
+    ) as c:
         yield c
     app.dependency_overrides.clear()
