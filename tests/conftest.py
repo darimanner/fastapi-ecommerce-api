@@ -4,6 +4,7 @@ import os
 # URLs are never used.
 os.environ.setdefault("DATABASE__URL", "postgresql+asyncpg://test:test@localhost/test")
 os.environ.setdefault("REDIS__URL", "redis://localhost:6379/0")
+os.environ.setdefault("AUTH__SECRET_KEY", "test-secret-key-for-tests-0123456789")
 
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path

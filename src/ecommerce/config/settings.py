@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import Annotated, Literal
 
 from pydantic import (
@@ -5,6 +6,7 @@ from pydantic import (
     Field,
     PostgresDsn,
     RedisDsn,
+    SecretStr,
     UrlConstraints,
     ValidationError,
 )
@@ -28,6 +30,13 @@ class RedisSettings(BaseModel):
     url: RedisDsn
 
 
+class AuthSettings(BaseModel):
+    secret_key: SecretStr = Field(min_length=32)
+    access_ttl: timedelta = timedelta(minutes=15)
+    refresh_ttl: timedelta = timedelta(days=30)
+    cookie_secure: bool = True
+
+
 class CatalogSettings(BaseModel):
     max_category_depth: int = Field(5, ge=1)
 
@@ -43,6 +52,7 @@ class Settings(BaseSettings):
     # Validating an empty default reports DATABASE__URL instead of DATABASE.
     database: DatabaseSettings = Field(default_factory=dict, validate_default=True)
     redis: RedisSettings = Field(default_factory=dict, validate_default=True)
+    auth: AuthSettings = Field(default_factory=dict, validate_default=True)
 
 
 def load_settings() -> Settings:

@@ -1,6 +1,11 @@
 from fastapi.testclient import TestClient
+from redis.exceptions import ConnectionError
 
-from ecommerce.core.exceptions.base import NotFoundError
+from ecommerce.core.exceptions.base import (
+    ForbiddenError,
+    NotFoundError,
+    UnauthorizedError,
+)
 from ecommerce.main import create_app
 
 app = create_app()
@@ -14,6 +19,21 @@ async def missing() -> None:
 @app.get("/boom")
 async def boom() -> None:
     raise RuntimeError("secret internals")
+
+
+@app.get("/unauthorized")
+async def unauthorized() -> None:
+    raise UnauthorizedError
+
+
+@app.get("/forbidden")
+async def forbidden() -> None:
+    raise ForbiddenError
+
+
+@app.get("/redis-down")
+async def redis_down() -> None:
+    raise ConnectionError("redis://secret-host")
 
 
 @app.get("/typed")
@@ -68,3 +88,23 @@ def test_unexpected_error_hides_details() -> None:
     assert response.headers["X-Request-ID"] == "r2"
     assert response.json()["detail"] == "Internal Server Error"
     assert response.json()["request_id"] == "r2"
+
+
+def test_unauthorized_sets_www_authenticate() -> None:
+    response = client.get("/unauthorized")
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+    assert response.json()["title"] == "Unauthorized"
+
+
+def test_forbidden_is_403() -> None:
+    assert client.get("/forbidden").status_code == 403
+
+
+def test_redis_error_is_service_unavailable() -> None:
+    response = client.get("/redis-down")
+
+    assert response.status_code == 503
+    assert response.headers["content-type"] == "application/problem+json"
+    assert response.json()["detail"] == "Service Unavailable"
