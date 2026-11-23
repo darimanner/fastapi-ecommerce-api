@@ -1,5 +1,5 @@
 from fastapi.testclient import TestClient
-from redis.exceptions import ConnectionError
+from redis.exceptions import ConnectionError as RedisConnectionError
 
 from ecommerce.core.exceptions.base import (
     ForbiddenError,
@@ -33,7 +33,7 @@ async def forbidden() -> None:
 
 @app.get("/redis-down")
 async def redis_down() -> None:
-    raise ConnectionError("redis://secret-host")
+    raise RedisConnectionError("redis://secret-host")
 
 
 @app.get("/typed")

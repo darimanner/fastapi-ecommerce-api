@@ -34,6 +34,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _set_refresh_cookie(response: Response, token: Token) -> None:
+    # Token responses must not be cached (RFC 6749 section 5.1).
+    response.headers["Cache-Control"] = "no-store"
     response.set_cookie(
         REFRESH_COOKIE,
         token.value,
@@ -48,10 +50,10 @@ def _set_refresh_cookie(response: Response, token: Token) -> None:
 users_router = APIRouter(prefix="/users", tags=["users"])
 
 
-@users_router.get("/me")
-async def me(service: Service, principal: CurrentUser) -> UserRead:
+@users_router.get("/me", response_model=UserRead)
+async def me(service: Service, principal: CurrentUser) -> User:
     # Stateless token: is_active is not rechecked, a ban applies at the next refresh.
-    return UserRead.model_validate(await service.get_user(principal.id))
+    return await service.get_user(principal.id)
 
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)

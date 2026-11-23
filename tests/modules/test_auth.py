@@ -48,7 +48,18 @@ async def update_user(db_session: AsyncSession, **values: object) -> None:
 @pytest.fixture
 async def signed_in(client: AsyncClient) -> Response:
     await register(client, EMAIL)
-    return await login(client)
+    response = await login(client)
+    assert response.status_code == 200, response.text
+    return response
+
+
+async def test_register_ignores_a_requested_role(client: AsyncClient) -> None:
+    response = await client.post(
+        REGISTER, json={"email": EMAIL, "password": PASSWORD, "role": "admin"}
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["role"] == "customer"
 
 
 async def test_register_returns_customer_without_secrets(client: AsyncClient) -> None:
@@ -231,20 +242,43 @@ async def test_logout_without_a_valid_cookie_succeeds(
     assert response.status_code == 204
 
 
-async def test_login_fails_closed_when_redis_is_down(
-    client: AsyncClient, redis: Redis, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("command", ["set", "getdel"])
+async def test_token_endpoints_fail_closed_when_redis_is_down(
+    client: AsyncClient,
+    redis: Redis,
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
 ) -> None:
     await register(client, EMAIL)
+    signed = await login(client)
+    cookie = signed.cookies["refresh_token"]
 
     async def down(*args: object, **kwargs: object) -> None:
         raise RedisConnectionError
 
-    monkeypatch.setattr(redis, "set", down)
+    monkeypatch.setattr(redis, command, down)
 
-    response = await login(client)
+    response = await login(client) if command == "set" else await refresh(client, cookie)
 
     assert response.status_code == 503
+    assert response.headers["content-type"].startswith("application/problem+json")
     assert "set-cookie" not in response.headers
+
+
+@pytest.mark.parametrize("endpoint", ["login", "refresh"])
+async def test_token_responses_are_not_cacheable(
+    client: AsyncClient, endpoint: str
+) -> None:
+    await register(client, EMAIL)
+    signed = await login(client)
+    response = (
+        signed
+        if endpoint == "login"
+        else await refresh(client, signed.cookies["refresh_token"])
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.headers["cache-control"] == "no-store"
 
 
 def bearer(token: str) -> dict[str, str]:

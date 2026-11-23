@@ -23,5 +23,5 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     email: Mapped[str] = mapped_column(String(320), unique=True)
     password_hash: Mapped[str] = mapped_column(String(255))
-    role: Mapped[Role] = mapped_column(String(20), default=Role.CUSTOMER)
-    is_active: Mapped[bool] = mapped_column(default=True)
+    role: Mapped[Role] = mapped_column(String(20), server_default=Role.CUSTOMER.value)
+    is_active: Mapped[bool] = mapped_column(server_default="true")

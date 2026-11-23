@@ -45,7 +45,8 @@ def test_missing_auth_secret_exits_with_variable_name(
         load_settings()
 
 
-def test_auth_defaults() -> None:
+def test_auth_defaults(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.chdir(tmp_path)
     auth = load_settings().auth
 
     assert auth.access_ttl == timedelta(minutes=15)

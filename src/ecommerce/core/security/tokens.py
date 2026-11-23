@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
-import uuid
-from uuid import UUID
+from uuid import UUID, uuid7
 
 import jwt
 
@@ -22,7 +21,7 @@ class Token:
 def issue_token(
     subject: UUID, token_type: TokenType, ttl: timedelta, **claims: str
 ) -> Token:
-    jti = uuid.uuid7()
+    jti = uuid7()
     now = datetime.now(UTC)
     # Extra claims go first so they can never override the reserved ones.
     payload = {
