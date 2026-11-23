@@ -57,7 +57,7 @@ This document is the entry point to the project's architecture documentation.
 | Background tasks | Taskiq |
 | Cache | Redis |
 | Observability | OpenTelemetry Collector -> Tempo (traces), Loki (logs), Prometheus (metrics), Grafana |
-| Auth | PyJWT + passlib[argon2] / argon2-cffi |
+| Auth | PyJWT + argon2-cffi |
 | Package manager | uv |
 | Linter/Formatter | ruff |
 | Type checking | mypy |

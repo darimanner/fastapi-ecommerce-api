@@ -1,83 +1,72 @@
 # Security
 
-> Status: planned
+> Status: partially implemented
+
+Authentication is built. Authorization (RBAC), security headers, the audit trail and idempotency are planned; their sections below are design only and are marked so.
 
 ## Authentication
 
-### JWT: PyJWT
+Stateless short-lived access tokens plus rotating refresh tokens whose `jti` lives in Redis. The reasoning is in [ADR-0006](../adr/0006-stateless-access-rotating-refresh.md).
 
-`PyJWT`, **not `python-jose`**: the latter is abandoned and has CVEs.
+### Libraries
 
-```python
-# src/ecommerce/core/security/jwt.py
-def encode_token(payload: dict, expires_in: timedelta) -> str: ...
-def decode_token(
-    token: str,
-) -> dict: ...  # raises UnauthorizedError if the token is invalid
-```
+- **PyJWT** (pinned `>=2.15.1`; earlier versions have open 2026 advisories). Not `python-jose`: it is abandoned and has CVEs.
+- **argon2-cffi** used directly. Not `passlib` (unmaintained). `pwdlib` would only wrap argon2-cffi here, because there are no legacy hashes to migrate.
+- Hardening rule for JWT: the HMAC key is always the plain secret string (never a JWK, a PEM or `PyJWK`), `algorithms=["HS256"]` is passed explicitly on every decode, and `PyJWKClient` is not used. This keeps the code off the key-confusion paths behind most PyJWT advisories.
 
-Claims structure:
+### Tokens
 
-```json
-{
-  "sub": "<user_uuid>",
-  "iat": 1700000000,
-  "exp": 1700003600,
-  "jti": "<token_uuid>",
-  "scope": "access | refresh",
-  "permissions": ["orders:read", "orders:write"]
-}
-```
+`src/ecommerce/core/security/tokens.py`: `issue_token(subject, token_type, ttl, **claims)` returns a `Token` (value, `jti`, `expires_in`); `decode_token(value, token_type)` raises `UnauthorizedError("Invalid or expired token")` for a bad signature, an expired token, missing claims or the wrong type. HS256, signed with `AUTH__SECRET_KEY` (required, at least 32 characters).
 
-### Access + Refresh tokens
+| Token | Lifetime | Claims |
+|-------|----------|--------|
+| Access | 15 minutes (`auth.access_ttl`) | `sub` (user id), `role`, `jti`, `type="access"`, `iat`, `exp` |
+| Refresh | 30 days (`auth.refresh_ttl`) | `sub`, `jti`, `type="refresh"`, `iat`, `exp` |
 
-- **Access**: short-lived (15 minutes), sent in `Authorization: Bearer`
-- **Refresh**: long-lived (30 days), kept in an HttpOnly cookie or the client's secure storage
-- `jti` is stored in Redis so that tokens can be revoked (logout, ban, password change)
+There are no permissions in the token. The access token goes in `Authorization: Bearer`. The refresh token travels only in the `refresh_token` cookie: HttpOnly, `Secure` (setting `auth.cookie_secure`, default true), `SameSite=Strict`, `Path=/api/v1/auth`, `Max-Age` equal to the refresh lifetime.
 
-### Password Hashing: Argon2
+### Refresh rotation
 
-`passlib[argon2]` or `argon2-cffi` directly.
+Each refresh token is stored in Redis as `auth:refresh:<jti>` -> user id with the refresh TTL. `POST /auth/refresh` consumes the key with `GETDEL` before it opens the database transaction, so of concurrent refreshes with the same token only one succeeds. A successful refresh issues a new pair and stores the new `jti`. `POST /auth/logout` deletes the key and clears the cookie; it succeeds without a valid cookie.
 
-```python
-# src/ecommerce/core/security/passwords.py
-from argon2 import PasswordHasher
+Redis errors map to 503 through the global handler: authentication fails closed when Redis is down.
 
-hasher = PasswordHasher()  # argon2id, sane defaults
+### Accepted tradeoffs
 
+- Logout revokes only the refresh token. The access token stays valid for up to 15 minutes.
+- A ban (`is_active = false`) or a role change applies at the next refresh, not immediately. `GET /users/me` does not check `is_active`.
+- If the database or Redis fails right after `GETDEL`, the old refresh token is already spent and the user logs in again.
+- Refresh token reuse detection (revoking the whole token family when a spent token is replayed) is not built.
 
-def hash_password(plain: str) -> str:
-    return hasher.hash(plain)
+### Password hashing: Argon2id
 
+`src/ecommerce/core/security/passwords.py`: `hash_password` and `verify_password` are async and run argon2-cffi (argon2id, library defaults) in `asyncio.to_thread`, so hashing never blocks the event loop. The service hashes and verifies outside the database transaction to keep the connection free.
 
-def verify_password(plain: str, hashed: str) -> bool:
-    try:
-        return hasher.verify(hashed, plain)
-    except VerifyMismatchError, InvalidHash:
-        return False
-```
+Login for an unknown email runs one verification against `DUMMY_HASH`, so the response time does not reveal whether the email exists. An inactive user is rejected only after the password check. Wrong email, wrong password and inactive user return the same `Invalid email or password`.
 
-Argon2id is the current OWASP standard. Not bcrypt (old), not PBKDF2 (slow with no benefit), not sha256 (not suitable for passwords at all).
+Argon2id is the current OWASP recommendation. Not bcrypt (old), not PBKDF2 (slow with no benefit), not sha256 (not suitable for passwords at all).
 
-### Auth Module
+### Auth module
 
 ```
 src/ecommerce/modules/auth/
-├── router.py      # POST /auth/register, /auth/login, /auth/refresh, /auth/logout
-├── service.py     # AuthService.login, register, refresh, logout
-├── models.py      # User
-├── schemas.py     # RegisterRequest, LoginRequest, TokenResponse
-├── repository.py  # UserRepository
-├── deps.py        # get_current_user(), get_current_user_optional()
-├── exceptions.py  # InvalidCredentialsError, TokenExpiredError, etc.
-└── events.py      # UserRegistered, UserLoggedIn
+├── router.py      # /auth/register, /auth/login, /auth/refresh, /auth/logout; GET /users/me
+├── service.py     # AuthService: register, login, refresh, logout, get_user
+├── models.py      # User, Role (customer, admin)
+├── schemas.py     # RegisterRequest, LoginRequest, TokenResponse, UserRead
+├── repository.py  # UserRepository (get_by_email)
+└── deps.py        # Principal, get_current_user, CurrentUser
 ```
+
+`get_current_user` reads the Bearer token, decodes it as an access token and builds a `Principal(id, role)`. A missing header, an expired or foreign token, or a missing or unknown `role` claim all give 401 with `WWW-Authenticate: Bearer`. Emails are lowercased in the schema and in the database (`CHECK (email = lower(email))`); passwords are 8 to 128 characters on registration.
 
 ## Authorization
 
+> Status: planned
+
 ### RBAC via permissions
 
-A user has roles, roles have permissions, and permissions go into the JWT claims.
+A user has a role, roles have permissions, and the permissions are resolved on the server from the `role` claim (the token carries no permissions).
 
 ```python
 # src/ecommerce/modules/auth/deps.py
@@ -97,6 +86,8 @@ async def delete_brand(id: int, _: User = Depends(requires("brands:delete"))): .
 For complex rules the alternative is **policy-based** authorization: a separate class such as `BrandPolicy.can_delete(user, brand)` with conditions like "owner or admin".
 
 ## Security Headers
+
+> Status: planned
 
 Middleware (`src/ecommerce/core/security/headers.py`) adds:
 
@@ -151,8 +142,12 @@ CI runs `pip-audit` (or `uv audit` once it stabilizes) and fails on known CVEs.
 
 ## Audit Trail
 
+> Status: planned
+
 Via `AuditMixin` (`created_by`, `updated_by`), plus optionally a separate `audit_log` table with a JSON dump of changes to critical entities (Order, Payment, User permissions).
 
 ## Idempotency
+
+> Status: planned
 
 Critical POST endpoints (order placement, payment) support the `Idempotency-Key` header. Requests with the same key return the same result, and a second call does not repeat the operation. Implemented with middleware plus a Redis cache of responses.

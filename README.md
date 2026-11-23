@@ -10,7 +10,7 @@ A production-grade e-commerce REST API built with FastAPI, SQLAlchemy and Postgr
 Work in progress. The v1 scope:
 
 - Catalog (done): category tree with cycle and depth checks, brands, products with variants (SKU, price, stock, options), a public listing with filters, keyset pages and totals from a Redis count cache
-- Accounts: registration, JWT access and refresh tokens, role-based permissions
+- Accounts (in progress): registration, login, refresh token rotation and `/users/me` are done; role-based permissions come next
 - Cart and checkout with stock reservation in one transaction
 - Order lifecycle with a state machine and automatic expiry of unpaid reservations
 - Rate limiting with a sliding window in Redis
@@ -22,7 +22,7 @@ Work in progress. The v1 scope:
 | --- | --- |
 | API | FastAPI, Pydantic v2 |
 | Database | PostgreSQL, SQLAlchemy 2 (async, asyncpg), Alembic |
-| Background jobs and cache | Redis (count cache); Taskiq (planned) |
+| Background jobs and cache | Redis (count cache, refresh tokens); Taskiq (planned) |
 | Observability | structlog; OpenTelemetry, Prometheus, Grafana (planned) |
 | Tooling | uv, ruff, mypy (strict), pytest, testcontainers, Docker |
 
