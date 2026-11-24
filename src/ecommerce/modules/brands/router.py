@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, Query, status
 
 from ecommerce.core.crud import CRUDService
 from ecommerce.core.pagination.offset import OffsetParams, Page
+from ecommerce.modules.auth.deps import requires
+from ecommerce.modules.auth.permissions import Permission
 from ecommerce.modules.brands.models import Brand
 from ecommerce.modules.brands.schemas import (
     BrandCreate,
@@ -24,7 +26,11 @@ def get_service(uow: UoW) -> BrandService:
 Service = Annotated[BrandService, Depends(get_service)]
 
 router = APIRouter(prefix="/brands", tags=["brands"])
-admin_router = APIRouter(prefix="/admin/brands", tags=["admin"])
+admin_router = APIRouter(
+    prefix="/admin/brands",
+    tags=["admin"],
+    dependencies=[Depends(requires(Permission.BRANDS_WRITE))],
+)
 
 
 @router.get("")

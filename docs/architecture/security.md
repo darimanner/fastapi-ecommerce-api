@@ -2,7 +2,7 @@
 
 > Status: partially implemented
 
-Authentication is built. Authorization (RBAC), security headers, CORS, rate limiting, dependency vulnerability scanning, the audit trail and idempotency are planned; their sections below are design only and are marked so.
+Authentication and authorization (RBAC) are built. Security headers, CORS, rate limiting, dependency vulnerability scanning, the audit trail and idempotency are planned; their sections below are design only and are marked so.
 
 ## Authentication
 
@@ -62,33 +62,61 @@ src/ecommerce/modules/auth/
 ├── models.py      # User, Role (customer, admin)
 ├── schemas.py     # RegisterRequest, LoginRequest, TokenResponse, UserRead
 ├── repository.py  # UserRepository (get_by_email)
-└── deps.py        # Principal, get_current_user, CurrentUser
+├── permissions.py # Permission, ROLE_PERMISSIONS
+└── deps.py        # Principal, get_current_user, CurrentUser, requires
 ```
 
 `get_current_user` reads the Bearer token, decodes it as an access token and builds a `Principal(id, role)`. A missing header, an expired or foreign token, or a missing or unknown `role` claim all give 401 with `WWW-Authenticate: Bearer`. Emails are lowercased in the schema and in the database (`CHECK (email = lower(email))`); passwords are 8 to 128 characters on registration.
 
 ## Authorization
 
-> Status: planned
+> Status: implemented
 
 ### RBAC via permissions
 
-A user has a role, roles have permissions, and the permissions are resolved on the server from the `role` claim (the token carries no permissions).
+A user has a role, roles have permissions, and the permissions are resolved on the server from the `role` claim (the token carries no permissions). `Principal.permissions` looks the role up in `ROLE_PERMISSIONS`. A change of a user's role applies at the next refresh, because the role is a token claim that refresh re-reads from the database; a change to `ROLE_PERMISSIONS` applies immediately, because the lookup is server-side.
 
 ```python
+# src/ecommerce/modules/auth/permissions.py
+class Permission(StrEnum):
+    BRANDS_WRITE = "brands:write"
+    CATEGORIES_WRITE = "categories:write"
+    PRODUCTS_WRITE = "products:write"
+
+
+ROLE_PERMISSIONS: Mapping[Role, frozenset[Permission]] = {
+    Role.CUSTOMER: frozenset(),
+    Role.ADMIN: frozenset(Permission),
+}
+
+
 # src/ecommerce/modules/auth/deps.py
-def requires(*permissions: str) -> Callable:
-    async def dep(user: User = Depends(get_current_user)) -> User:
-        if not all(p in user.permissions for p in permissions):
-            raise ForbiddenError(f"Missing permissions: {permissions}")
-        return user
+def requires(*permissions: Permission) -> Callable[[Principal], Awaitable[Principal]]:
+    async def check(principal: CurrentUser) -> Principal:
+        missing = [p.value for p in permissions if p not in principal.permissions]
+        if missing:
+            raise ForbiddenError(
+                f"Missing permissions: {', '.join(missing)}", missing=missing
+            )
+        return principal
 
-    return dep
+    return check
 
 
-@router.delete("/{id}")
-async def delete_brand(id: int, _: User = Depends(requires("brands:delete"))): ...
+# modules/brands/router.py
+admin_router = APIRouter(
+    prefix="/admin/brands",
+    tags=["admin"],
+    dependencies=[Depends(requires(Permission.BRANDS_WRITE))],
+)
 ```
+
+The dependency sits on the router, so every write route of the module is covered, including the variant routes of the products `admin_router`. Public `router`s have no dependency.
+
+- 401: no token, or an expired, malformed or foreign one (`WWW-Authenticate: Bearer`).
+- 403: a valid token whose role lacks a permission; the problem body lists the missing ones in `missing`.
+
+The first admin is created with `make admin email=...` (`python -m ecommerce.cli create-admin EMAIL`). The password comes from `ADMIN_PASSWORD` or two `getpass` prompts and is never echoed. Exit code 0: created; 2: invalid input; 1: not created (for example a duplicate email; other failures, such as an unreachable database, print a traceback).
 
 For complex rules the alternative is **policy-based** authorization: a separate class such as `BrandPolicy.can_delete(user, brand)` with conditions like "owner or admin".
 

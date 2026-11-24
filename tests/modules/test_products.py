@@ -5,6 +5,8 @@ import pytest
 
 from tests.modules.catalog import ADMIN_PRODUCTS as ADMIN, PRODUCTS, Json, post, variant
 
+pytestmark = pytest.mark.usefixtures("admin")
+
 VARIANTS = "/api/v1/admin/variants"
 
 

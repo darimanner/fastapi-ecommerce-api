@@ -14,6 +14,8 @@ make check     # pre-commit: ruff, mypy --strict, uv lock check
 make revision m="add brands"   # autogenerate a migration
 ```
 
+`make check` runs pre-commit on tracked files only, so `git add` new files before running it.
+
 Change dependencies only with `uv add` / `uv remove`; never edit `uv.lock` by hand.
 
 ## Layout
@@ -28,7 +30,7 @@ Change dependencies only with `uv add` / `uv remove`; never edit `uv.lock` by ha
 
 A module stays thin: model, schemas, repository, an explicit router, plus a service, `exceptions.py` or `events.py` only when it has real logic. No empty files. Standard CRUD comes from `core/crud.py::CRUDService`; domain rules go in its `_before_write` hook. A service that needs more than the generic repository declares a UoW Protocol with just its repositories (see `modules/categories/service.py`).
 
-New module checklist: folder, repository in `AppUnitOfWork`, routers in `create_app()` (`main.py`), `make revision`. Reads go on `router` (`/api/v1/<name>`), writes on `admin_router` (`/api/v1/admin/<name>`); admin routes stay open until role permissions land (next PR).
+New module checklist: folder, repository in `AppUnitOfWork`, routers in `create_app()` (`main.py`), `make revision`. Reads go on `router` (`/api/v1/<name>`), writes on `admin_router` (`/api/v1/admin/<name>`); every `admin_router` gets `dependencies=[Depends(requires(Permission.<X>_WRITE))]`, and a new resource adds its permission to `modules/auth/permissions.py`.
 
 ## Conventions
 

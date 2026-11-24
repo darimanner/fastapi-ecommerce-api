@@ -2,7 +2,7 @@
 
 > Status: partially implemented
 
-Implemented today under `src/ecommerce/`: `config/settings.py`, `main.py`, `api/health.py`, `core/db/` (`model.py`, `sessions.py`, `mixins/timestamp.py`, `mixins/uuid_pk.py`), `core/exceptions/` (`base.py`, `handlers.py`, `db.py`), `core/pagination/`, `core/observability/` (`logging.py`, `middleware.py`), `core/crud.py`, `core/slug.py`, `core/redis.py`, `core/counts.py`, `core/security/` (`tokens.py`, `passwords.py`), `interfaces/` (`repository.py`, `unit_of_work.py`), `infrastructure/` (`repository.py`, `unit_of_work.py`), `uow.py`, `cache.py`, and the `auth`, `brands`, `categories` and `products` modules. The rest of the tree is the target layout.
+Implemented today under `src/ecommerce/`: `config/settings.py`, `main.py`, `api/health.py`, `core/db/` (`model.py`, `sessions.py`, `mixins/timestamp.py`, `mixins/uuid_pk.py`), `core/exceptions/` (`base.py`, `handlers.py`, `db.py`), `core/pagination/`, `core/observability/` (`logging.py`, `middleware.py`), `core/crud.py`, `core/slug.py`, `core/redis.py`, `core/counts.py`, `core/security/` (`tokens.py`, `passwords.py`), `interfaces/` (`repository.py`, `unit_of_work.py`), `infrastructure/` (`repository.py`, `unit_of_work.py`), `uow.py`, `cache.py`, `cli.py`, and the `auth`, `brands`, `categories` and `products` modules. The rest of the tree is the target layout.
 
 The approach is a **modular monolith**: each domain lives in its own folder and is self-contained. This improves cohesion, makes it easier to extract a module into a separate service later, and keeps feature work local.
 
@@ -15,6 +15,7 @@ src/ecommerce/
 ├── main.py                   # FastAPI app factory (create_app), middleware, lifespan
 ├── uow.py                    # AppUnitOfWork: composition root of module repositories
 ├── cache.py                  # CatalogCounts: count cache shared by catalog modules
+├── cli.py                    # python -m ecommerce.cli create-admin
 │
 ├── core/                     # Framework code - reused as is
 │   ├── db/
@@ -120,4 +121,4 @@ Models live in `modules/brands/models.py`, not in a global `infrastructure/model
 
 `migrations/env.py` calls `import_all_models()` (`modules/__init__.py`), which imports every `modules/*/models.py`, so Alembic sees all tables without a manual list.
 
-Adding a module means: the folder, its repository in `AppUnitOfWork` (`uow.py`), its routers in `create_app()` (`main.py`), and a migration.
+Adding a module means: the folder, its repository in `AppUnitOfWork` (`uow.py`), its routers in `create_app()` (`main.py`), its permission in `modules/auth/permissions.py` with the router-level `dependencies=[Depends(requires(Permission.<X>_WRITE))]` on its `admin_router`, and a migration.

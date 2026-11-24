@@ -10,7 +10,7 @@ A production-grade e-commerce REST API built with FastAPI, SQLAlchemy and Postgr
 Work in progress. The v1 scope:
 
 - Catalog (done): category tree with cycle and depth checks, brands, products with variants (SKU, price, stock, options), a public listing with filters, keyset pages and totals from a Redis count cache
-- Accounts (in progress): registration, login, refresh token rotation and `/users/me` are done; role-based permissions come next
+- Accounts (done): registration, login, refresh token rotation, `/users/me`, and role-based permissions on the admin write routes; the first admin is created with `make admin`
 - Cart and checkout with stock reservation in one transaction
 - Order lifecycle with a state machine and automatic expiry of unpaid reservations
 - Rate limiting with a sliding window in Redis
@@ -44,9 +44,10 @@ make install
 cp .env.example .env
 make up
 make migrate
+make admin email=admin@example.com
 ```
 
-`make install` sets up the git hooks, so run it inside a git repository.
+`make install` sets up the git hooks, so run it inside a git repository. `make admin` creates the first admin (write routes need an admin token); it asks for the password, or reads `ADMIN_PASSWORD`.
 
 ## Make targets
 
@@ -57,6 +58,7 @@ make migrate
 | `make down` | `docker compose down`: stops them, the PostgreSQL data volume stays |
 | `make migrate` | `alembic upgrade head`: applies all migrations |
 | `make revision m="..."` | `alembic revision --autogenerate`: new migration from model changes |
+| `make admin email=...` | `python -m ecommerce.cli create-admin`: creates a user with the admin role |
 | `make run` | `fastapi dev`: dev server with reload on http://127.0.0.1:8000 |
 | `make test` | `pytest --cov`: tests on throwaway PostgreSQL and Redis containers, fails below 85% coverage |
 | `make check` | `pre-commit run --all-files`: ruff, mypy, lock check, file hygiene |
@@ -100,6 +102,14 @@ docker run -p 8000:8000 -e DATABASE__URL=... -e REDIS__URL=... -e AUTH__SECRET_K
 Settings are loaded in full, also by `alembic upgrade head`, and `.dockerignore` excludes `.env`, so all three variables must be passed.
 
 The image runs as a non-root user and does not migrate on startup: run migrations as a separate deploy step.
+
+Create the first admin in a container:
+
+```bash
+docker run --rm -it -e DATABASE__URL=... -e REDIS__URL=... -e AUTH__SECRET_KEY=... fastapi-ecommerce-api python -m ecommerce.cli create-admin admin@example.com
+```
+
+`-it` is needed for the password prompt. Alternatively pass `-e ADMIN_PASSWORD` without a value: Docker takes it from your environment, so the password is not typed in the command.
 
 ## Template updates
 
