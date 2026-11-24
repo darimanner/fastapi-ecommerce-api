@@ -14,7 +14,8 @@ from ecommerce.modules.auth.schemas import RegisterRequest
 from ecommerce.modules.auth.service import AuthService
 from ecommerce.uow import AppUnitOfWork
 
-app = typer.Typer(add_completion=False)
+# Plain tracebacks: rich ones can print frame locals, i.e. the password.
+app = typer.Typer(add_completion=False, pretty_exceptions_enable=False)
 
 
 # The callback keeps create-admin a subcommand: with a single command and no

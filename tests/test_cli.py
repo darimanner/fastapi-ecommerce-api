@@ -93,7 +93,13 @@ def test_command_asks_again_when_prompts_differ(
 
     assert result.exit_code == 0
     assert "do not match" in result.output
+    assert PASSWORD not in result.output
     assert created == [(EMAIL, PASSWORD)]
+
+
+def test_tracebacks_never_show_locals() -> None:
+    # CliRunner bypasses Typer's exception hook, so pin the setting itself.
+    assert cli.app.pretty_exceptions_enable is False
 
 
 def test_command_duplicate_email_exits_1(monkeypatch: pytest.MonkeyPatch) -> None:
