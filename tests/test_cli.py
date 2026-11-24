@@ -1,13 +1,20 @@
+import asyncio
 import getpass
+from uuid import uuid7
 
 from httpx import AsyncClient
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy import delete
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from ecommerce import cli
 from ecommerce.core.exceptions.base import ConflictError
 from ecommerce.core.security.tokens import decode_token
-from ecommerce.modules.auth.models import Role
+from ecommerce.modules.auth.models import Role, User
 from ecommerce.uow import AppUnitOfWork
 
 EMAIL = "root@example.com"
@@ -80,6 +87,35 @@ def test_main_duplicate_email_exits_1(
 
     assert cli.main(["create-admin", EMAIL]) == 1
     assert "email already exists" in capsys.readouterr().err
+
+
+async def _delete_user(url: str, email: str) -> None:
+    engine = create_async_engine(url)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(delete(User).where(User.email == email))
+    finally:
+        await engine.dispose()
+
+
+# main() commits for real on its own engine; the engine fixture only makes sure
+# the migrations have run.
+@pytest.mark.usefixtures("engine")
+def test_main_against_the_database(
+    monkeypatch: pytest.MonkeyPatch, postgres_url: str
+) -> None:
+    email = f"cli-{uuid7().hex}@example.com"
+    cli_engine = create_async_engine(postgres_url)
+    monkeypatch.setattr(cli, "engine", cli_engine)
+    monkeypatch.setattr(
+        cli, "session_factory", async_sessionmaker(cli_engine, expire_on_commit=False)
+    )
+    monkeypatch.setenv("ADMIN_PASSWORD", PASSWORD)
+    try:
+        assert cli.main(["create-admin", email]) == 0
+        assert cli.main(["create-admin", email]) == 1
+    finally:
+        asyncio.run(_delete_user(postgres_url, email))
 
 
 def test_main_short_password_exits_2_without_echoing_it(

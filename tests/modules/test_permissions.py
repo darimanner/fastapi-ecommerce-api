@@ -1,15 +1,28 @@
 from datetime import timedelta
-from uuid import uuid7
+import re
+from uuid import UUID, uuid7
 
 from httpx import AsyncClient
 import pytest
 
 from ecommerce.core.security.tokens import issue_token
+from ecommerce.main import app
+from ecommerce.modules.auth.models import Role
+from ecommerce.modules.auth.permissions import ROLE_PERMISSIONS
 
 ENDPOINTS = [
     ("/api/v1/admin/brands", "brands"),
     ("/api/v1/admin/categories", "categories"),
     ("/api/v1/admin/products", "products"),
+]
+
+# app.routes holds _IncludedRouter objects on this FastAPI version, not APIRoute,
+# so the operations come from the OpenAPI schema.
+ADMIN_OPERATIONS = [
+    (method.upper(), re.sub(r"\{\w+\}", str(UUID(int=1)), path))
+    for path, operations in app.openapi()["paths"].items()
+    if path.startswith("/api/v1/admin/")
+    for method in operations
 ]
 
 
@@ -18,9 +31,25 @@ def authorize(client: AsyncClient, role: str) -> None:
     client.headers["Authorization"] = f"Bearer {token.value}"
 
 
-@pytest.mark.parametrize(("url", "resource"), ENDPOINTS)
-async def test_no_token_is_401(client: AsyncClient, url: str, resource: str) -> None:
-    assert (await client.post(url, json={})).status_code == 401
+def test_admin_sweep_is_not_vacuous() -> None:
+    assert ADMIN_OPERATIONS
+
+
+@pytest.mark.parametrize(("method", "url"), ADMIN_OPERATIONS)
+async def test_every_admin_operation_is_gated(
+    client: AsyncClient, method: str, url: str
+) -> None:
+    assert (await client.request(method, url)).status_code == 401
+
+    authorize(client, "customer")
+    response = await client.request(method, url)
+    assert response.status_code == 403
+    assert response.json()["missing"]
+
+
+def test_every_role_has_permissions() -> None:
+    # A role missing here would be a KeyError, i.e. a 500, on its first request.
+    assert set(ROLE_PERMISSIONS) == set(Role)
 
 
 @pytest.mark.parametrize(("url", "resource"), ENDPOINTS)
