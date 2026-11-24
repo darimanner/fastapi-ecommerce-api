@@ -1,4 +1,4 @@
-.PHONY: install up down migrate revision run test check
+.PHONY: install up down migrate revision admin run test check
 
 install:
 	uv sync
@@ -15,6 +15,9 @@ migrate:
 
 revision:
 	uv run alembic revision --autogenerate -m "$(m)"
+
+admin:
+	uv run python -m ecommerce.cli create-admin $(email)
 
 run:
 	uv run fastapi dev src/ecommerce/main.py

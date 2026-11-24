@@ -44,9 +44,10 @@ make install
 cp .env.example .env
 make up
 make migrate
+make admin email=admin@example.com
 ```
 
-`make install` sets up the git hooks, so run it inside a git repository.
+`make install` sets up the git hooks, so run it inside a git repository. `make admin` creates the first admin (write routes need an admin token); it asks for the password, or reads `ADMIN_PASSWORD`.
 
 ## Make targets
 
@@ -57,6 +58,7 @@ make migrate
 | `make down` | `docker compose down`: stops them, the PostgreSQL data volume stays |
 | `make migrate` | `alembic upgrade head`: applies all migrations |
 | `make revision m="..."` | `alembic revision --autogenerate`: new migration from model changes |
+| `make admin email=...` | `python -m ecommerce.cli create-admin`: creates a user with the admin role |
 | `make run` | `fastapi dev`: dev server with reload on http://127.0.0.1:8000 |
 | `make test` | `pytest --cov`: tests on throwaway PostgreSQL and Redis containers, fails below 85% coverage |
 | `make check` | `pre-commit run --all-files`: ruff, mypy, lock check, file hygiene |
