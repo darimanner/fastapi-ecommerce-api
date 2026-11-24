@@ -16,6 +16,7 @@ dependencies = [
     "redis>=8.1.0",
     "sqlalchemy[asyncio]>=2.1.8",
     "structlog>=26.1.0",
+    "typer>=0.29.2",
 ]
 
 [build-system]
