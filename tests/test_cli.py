@@ -1,5 +1,4 @@
 import asyncio
-import getpass
 from uuid import uuid7
 
 from httpx import AsyncClient
@@ -10,6 +9,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from typer.testing import CliRunner, Result
 
 from ecommerce import cli
 from ecommerce.core.exceptions.base import ConflictError
@@ -44,7 +44,16 @@ async def test_create_admin_duplicate_email_is_a_conflict(
         await cli.create_admin(AppUnitOfWork(session_factory), EMAIL, PASSWORD)
 
 
-# main() runs asyncio.run, a new event loop, so these tests stay sync and fake
+def invoke(
+    email: str = EMAIL, password: str | None = PASSWORD, prompts: str | None = None
+) -> Result:
+    # password=None unsets ADMIN_PASSWORD, so the command prompts.
+    return CliRunner().invoke(
+        cli.app, ["create-admin", email], input=prompts, env={"ADMIN_PASSWORD": password}
+    )
+
+
+# The command runs asyncio.run, a new event loop, so these tests stay sync and fake
 # create_admin: the test session_factory is bound to the session-scoped loop.
 @pytest.fixture
 def created(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
@@ -57,36 +66,46 @@ def created(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
     return calls
 
 
-def test_main_reads_password_from_env(
-    monkeypatch: pytest.MonkeyPatch, created: list[tuple[str, str]]
-) -> None:
-    monkeypatch.setenv("ADMIN_PASSWORD", PASSWORD)
+def test_command_reads_password_from_env(created: list[tuple[str, str]]) -> None:
+    result = invoke()
 
-    assert cli.main(["create-admin", EMAIL]) == 0
+    assert result.exit_code == 0
+    assert result.stdout == f"Admin {EMAIL} created\n"
     assert created == [(EMAIL, PASSWORD)]
 
 
-def test_main_prompts_when_env_is_missing(
-    monkeypatch: pytest.MonkeyPatch, created: list[tuple[str, str]]
+def test_command_prompts_twice_when_env_is_missing(
+    created: list[tuple[str, str]],
 ) -> None:
-    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
-    monkeypatch.setattr(getpass, "getpass", lambda _prompt="": PASSWORD)
+    result = invoke(password=None, prompts=f"{PASSWORD}\n{PASSWORD}\n")
 
-    assert cli.main(["create-admin", EMAIL]) == 0
+    assert result.exit_code == 0
+    assert created == [(EMAIL, PASSWORD)]
+    assert PASSWORD not in result.output
+
+
+def test_command_asks_again_when_prompts_differ(
+    created: list[tuple[str, str]],
+) -> None:
+    prompts = f"{PASSWORD}\n{PASSWORD}x\n{PASSWORD}\n{PASSWORD}\n"
+
+    result = invoke(password=None, prompts=prompts)
+
+    assert result.exit_code == 0
+    assert "do not match" in result.output
     assert created == [(EMAIL, PASSWORD)]
 
 
-def test_main_duplicate_email_exits_1(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_command_duplicate_email_exits_1(monkeypatch: pytest.MonkeyPatch) -> None:
     async def conflict(uow: object, email: str, password: str) -> None:
         raise ConflictError("email already exists")
 
-    monkeypatch.setenv("ADMIN_PASSWORD", PASSWORD)
     monkeypatch.setattr(cli, "create_admin", conflict)
 
-    assert cli.main(["create-admin", EMAIL]) == 1
-    assert "email already exists" in capsys.readouterr().err
+    result = invoke()
+
+    assert result.exit_code == 1
+    assert "email already exists" in result.stderr
 
 
 async def _delete_user(url: str, email: str) -> None:
@@ -98,10 +117,10 @@ async def _delete_user(url: str, email: str) -> None:
         await engine.dispose()
 
 
-# main() commits for real on its own engine; the engine fixture only makes sure
-# the migrations have run.
+# The command commits for real on its own engine; the engine fixture only makes
+# sure the migrations have run.
 @pytest.mark.usefixtures("engine")
-def test_main_against_the_database(
+def test_command_against_the_database(
     monkeypatch: pytest.MonkeyPatch, postgres_url: str
 ) -> None:
     email = f"cli-{uuid7().hex}@example.com"
@@ -110,34 +129,21 @@ def test_main_against_the_database(
     monkeypatch.setattr(
         cli, "session_factory", async_sessionmaker(cli_engine, expire_on_commit=False)
     )
-    monkeypatch.setenv("ADMIN_PASSWORD", PASSWORD)
     try:
-        assert cli.main(["create-admin", email]) == 0
-        assert cli.main(["create-admin", email]) == 1
+        assert invoke(email).exit_code == 0
+        assert invoke(email).exit_code == 1
     finally:
         asyncio.run(_delete_user(postgres_url, email))
 
 
-def test_main_short_password_exits_2_without_echoing_it(
-    monkeypatch: pytest.MonkeyPatch,
+def test_command_short_password_exits_2_without_echoing_it(
     created: list[tuple[str, str]],
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setenv("ADMIN_PASSWORD", "s3cr3t")
+    short = "s3cr3t"
 
-    assert cli.main(["create-admin", EMAIL]) == 2
+    result = invoke(password=short)
+
+    assert result.exit_code == 2
     assert created == []
-    err = capsys.readouterr().err
-    assert "password" in err
-    assert "s3cr3t" not in err
-
-
-def test_main_mismatching_prompts_exit_2(
-    monkeypatch: pytest.MonkeyPatch, created: list[tuple[str, str]]
-) -> None:
-    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
-    answers = iter([PASSWORD, PASSWORD + "x"])
-    monkeypatch.setattr(getpass, "getpass", lambda _prompt="": next(answers))
-
-    assert cli.main(["create-admin", EMAIL]) == 2
-    assert created == []
+    assert "password" in result.stderr
+    assert short not in result.output
