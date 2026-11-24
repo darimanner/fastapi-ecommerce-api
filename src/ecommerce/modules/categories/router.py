@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, Query, status
 from ecommerce.cache import CatalogCounts
 from ecommerce.config.settings import settings
 from ecommerce.core.pagination.offset import OffsetParams, Page
+from ecommerce.modules.auth.deps import requires
+from ecommerce.modules.auth.permissions import Permission
 from ecommerce.modules.categories.models import Category
 from ecommerce.modules.categories.schemas import (
     CategoryCreate,
@@ -24,7 +26,11 @@ def get_service(uow: UoW, counts: CatalogCounts) -> CategoryService:
 Service = Annotated[CategoryService, Depends(get_service)]
 
 router = APIRouter(prefix="/categories", tags=["categories"])
-admin_router = APIRouter(prefix="/admin/categories", tags=["admin"])
+admin_router = APIRouter(
+    prefix="/admin/categories",
+    tags=["admin"],
+    dependencies=[Depends(requires(Permission.CATEGORIES_WRITE))],
+)
 
 
 @router.get("")

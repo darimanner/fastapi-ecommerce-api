@@ -1,6 +1,9 @@
 from typing import Any
 
 from httpx import AsyncClient
+import pytest
+
+pytestmark = pytest.mark.usefixtures("admin")
 
 BRANDS = "/api/v1/brands"
 ADMIN = "/api/v1/admin/brands"

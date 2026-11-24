@@ -21,6 +21,8 @@ from ecommerce.modules.categories.schemas import (
 from ecommerce.modules.categories.service import CategoryService
 from ecommerce.uow import AppUnitOfWork
 
+pytestmark = pytest.mark.usefixtures("admin")
+
 CATEGORIES = "/api/v1/categories"
 ADMIN = "/api/v1/admin/categories"
 

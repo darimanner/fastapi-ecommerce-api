@@ -5,6 +5,8 @@ from fastapi import APIRouter, Body, Depends, Query, status
 
 from ecommerce.cache import CatalogCounts
 from ecommerce.core.pagination.cursor import CursorPage
+from ecommerce.modules.auth.deps import requires
+from ecommerce.modules.auth.permissions import Permission
 from ecommerce.modules.products.models import Product, ProductVariant
 from ecommerce.modules.products.schemas import (
     ProductCreate,
@@ -35,7 +37,11 @@ Variants = Annotated[VariantService, Depends(get_variants)]
 NewVariants = Annotated[list[VariantCreate], Body(min_length=1, max_length=100)]
 
 router = APIRouter(prefix="/products", tags=["products"])
-admin_router = APIRouter(prefix="/admin", tags=["admin"])
+admin_router = APIRouter(
+    prefix="/admin",
+    tags=["admin"],
+    dependencies=[Depends(requires(Permission.PRODUCTS_WRITE))],
+)
 
 
 @router.get("")

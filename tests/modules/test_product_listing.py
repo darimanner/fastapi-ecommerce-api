@@ -15,6 +15,8 @@ from ecommerce.modules.products.service import ProductService
 from ecommerce.uow import AppUnitOfWork
 from tests.modules.catalog import ADMIN_PRODUCTS, PRODUCTS, Json, post, variant
 
+pytestmark = pytest.mark.usefixtures("admin")
+
 VARIANTS = "/api/v1/admin/variants"
 
 
@@ -53,7 +55,7 @@ class Shop:
 
 
 @pytest.fixture
-async def shop(client: AsyncClient) -> Shop:
+async def shop(admin: None, client: AsyncClient) -> Shop:
     shop = Shop(client)
     await shop.ref("categories", "Shoes")
     await shop.ref("categories", "Running", parent="Shoes")
