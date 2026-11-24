@@ -74,7 +74,7 @@ src/ecommerce/modules/auth/
 
 ### RBAC via permissions
 
-A user has a role, roles have permissions, and the permissions are resolved on the server from the `role` claim (the token carries no permissions). `Principal.permissions` looks the role up in `ROLE_PERMISSIONS`, so a role change applies at the next refresh.
+A user has a role, roles have permissions, and the permissions are resolved on the server from the `role` claim (the token carries no permissions). `Principal.permissions` looks the role up in `ROLE_PERMISSIONS`. A change of a user's role applies at the next refresh, because the role is a token claim that refresh re-reads from the database; a change to `ROLE_PERMISSIONS` applies immediately, because the lookup is server-side.
 
 ```python
 # src/ecommerce/modules/auth/permissions.py
@@ -84,14 +84,14 @@ class Permission(StrEnum):
     PRODUCTS_WRITE = "products:write"
 
 
-ROLE_PERMISSIONS = {
+ROLE_PERMISSIONS: Mapping[Role, frozenset[Permission]] = {
     Role.CUSTOMER: frozenset(),
     Role.ADMIN: frozenset(Permission),
 }
 
 
 # src/ecommerce/modules/auth/deps.py
-def requires(*permissions: Permission):
+def requires(*permissions: Permission) -> Callable[[Principal], Awaitable[Principal]]:
     async def check(principal: CurrentUser) -> Principal:
         missing = [p.value for p in permissions if p not in principal.permissions]
         if missing:
@@ -116,7 +116,7 @@ The dependency sits on the router, so every write route of the module is covered
 - 401: no token, or an expired, malformed or foreign one (`WWW-Authenticate: Bearer`).
 - 403: a valid token whose role lacks a permission; the problem body lists the missing ones in `missing`.
 
-The first admin is created with `make admin email=...` (`python -m ecommerce.cli create-admin EMAIL`). The password comes from `ADMIN_PASSWORD` or two `getpass` prompts and is never echoed. Exit code 0 on success, 1 for a duplicate email, 2 for invalid input.
+The first admin is created with `make admin email=...` (`python -m ecommerce.cli create-admin EMAIL`). The password comes from `ADMIN_PASSWORD` or two `getpass` prompts and is never echoed. Exit code 0: created; 2: invalid input; 1: not created (for example a duplicate email; other failures, such as an unreachable database, print a traceback).
 
 For complex rules the alternative is **policy-based** authorization: a separate class such as `BrandPolicy.can_delete(user, brand)` with conditions like "owner or admin".
 

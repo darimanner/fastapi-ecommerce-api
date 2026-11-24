@@ -103,6 +103,14 @@ Settings are loaded in full, also by `alembic upgrade head`, and `.dockerignore`
 
 The image runs as a non-root user and does not migrate on startup: run migrations as a separate deploy step.
 
+Create the first admin in a container:
+
+```bash
+docker run --rm -it -e DATABASE__URL=... -e REDIS__URL=... -e AUTH__SECRET_KEY=... fastapi-ecommerce-api python -m ecommerce.cli create-admin admin@example.com
+```
+
+`-it` is needed for the password prompt. Alternatively pass `-e ADMIN_PASSWORD` without a value: Docker takes it from your environment, so the password is not typed in the command.
+
 ## Template updates
 
 Generated from [fastapi-service-template](https://github.com/darimanner/fastapi-service-template). Pull template changes with:
