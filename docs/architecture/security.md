@@ -116,7 +116,7 @@ The dependency sits on the router, so every write route of the module is covered
 - 401: no token, or an expired, malformed or foreign one (`WWW-Authenticate: Bearer`).
 - 403: a valid token whose role lacks a permission; the problem body lists the missing ones in `missing`.
 
-The first admin is created with `make admin email=...` (`python -m ecommerce.cli create-admin EMAIL`). The password comes from `ADMIN_PASSWORD` or two `getpass` prompts and is never echoed. Exit code 0: created; 2: invalid input; 1: not created (for example a duplicate email; other failures, such as an unreachable database, print a traceback).
+The first admin is created with `make admin email=...` (`python -m ecommerce.cli create-admin EMAIL`, a Typer app). The password comes from `ADMIN_PASSWORD` or a hidden prompt asked twice (again on a mismatch) and is never echoed; there is no `--password` option, so it never lands in shell history or the process list. Exit code 0: created; 2: invalid input or usage; 1: not created (for example a duplicate email or Ctrl+C; other failures, such as an unreachable database, print a traceback).
 
 For complex rules the alternative is **policy-based** authorization: a separate class such as `BrandPolicy.can_delete(user, brand)` with conditions like "owner or admin".
 

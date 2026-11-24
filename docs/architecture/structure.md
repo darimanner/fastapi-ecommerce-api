@@ -15,7 +15,7 @@ src/ecommerce/
 ├── main.py                   # FastAPI app factory (create_app), middleware, lifespan
 ├── uow.py                    # AppUnitOfWork: composition root of module repositories
 ├── cache.py                  # CatalogCounts: count cache shared by catalog modules
-├── cli.py                    # python -m ecommerce.cli create-admin
+├── cli.py                    # Typer app: python -m ecommerce.cli create-admin
 │
 ├── core/                     # Framework code - reused as is
 │   ├── db/
