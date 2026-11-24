@@ -58,7 +58,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         password = _read_password()
         # Validate up front so bad input exits 2 before any connection is opened.
         RegisterRequest(email=args.email, password=password)
-    except (ValueError, ValidationError) as exc:
+    except ValidationError as exc:
+        # Never format the exception itself: it echoes input_value, i.e. the password.
+        reasons = "; ".join(
+            f"{err['loc'][-1]}: {err['msg']}"
+            for err in exc.errors(include_input=False, include_url=False)
+        )
+        sys.stderr.write(f"Invalid input: {reasons}\n")
+        return 2
+    except ValueError as exc:
         sys.stderr.write(f"Invalid input: {exc}\n")
         return 2
     try:

@@ -82,13 +82,18 @@ def test_main_duplicate_email_exits_1(
     assert "email already exists" in capsys.readouterr().err
 
 
-def test_main_short_password_exits_2(
-    monkeypatch: pytest.MonkeyPatch, created: list[tuple[str, str]]
+def test_main_short_password_exits_2_without_echoing_it(
+    monkeypatch: pytest.MonkeyPatch,
+    created: list[tuple[str, str]],
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setenv("ADMIN_PASSWORD", "short")
+    monkeypatch.setenv("ADMIN_PASSWORD", "s3cr3t")
 
     assert cli.main(["create-admin", EMAIL]) == 2
     assert created == []
+    err = capsys.readouterr().err
+    assert "password" in err
+    assert "s3cr3t" not in err
 
 
 def test_main_mismatching_prompts_exit_2(
