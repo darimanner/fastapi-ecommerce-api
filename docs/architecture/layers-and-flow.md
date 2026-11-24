@@ -55,7 +55,7 @@ async def create_brand(service: Service, payload: BrandCreate) -> Brand:
     return await service.create(payload)
 ```
 
-Each module has a public `router` (`/api/v1/brands`) and an `admin_router` (`/api/v1/admin/brands`) for writes. Admin routes are open until the auth module adds permission checks.
+Each module has a public `router` (`/api/v1/brands`) and an `admin_router` (`/api/v1/admin/brands`) for writes. Every `admin_router` declares `dependencies=[Depends(requires(Permission.X_WRITE))]`, so a request needs a Bearer token whose role holds that permission (401 without a valid token, 403 without the permission).
 
 ### Service (`modules/{m}/service.py`)
 

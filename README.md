@@ -10,7 +10,7 @@ A production-grade e-commerce REST API built with FastAPI, SQLAlchemy and Postgr
 Work in progress. The v1 scope:
 
 - Catalog (done): category tree with cycle and depth checks, brands, products with variants (SKU, price, stock, options), a public listing with filters, keyset pages and totals from a Redis count cache
-- Accounts (in progress): registration, login, refresh token rotation and `/users/me` are done; role-based permissions come next
+- Accounts (done): registration, login, refresh token rotation, `/users/me`, and role-based permissions on the admin write routes; the first admin is created with `make admin`
 - Cart and checkout with stock reservation in one transaction
 - Order lifecycle with a state machine and automatic expiry of unpaid reservations
 - Rate limiting with a sliding window in Redis
