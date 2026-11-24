@@ -10,6 +10,7 @@ from ecommerce.core.exceptions.handlers import register_exception_handlers
 from ecommerce.core.observability.logging import setup_logging
 from ecommerce.core.observability.middleware import request_context
 from ecommerce.core.redis import redis_client
+from ecommerce.modules.auth import router as auth
 from ecommerce.modules.brands import router as brands
 from ecommerce.modules.categories import router as categories
 from ecommerce.modules.products import router as products
@@ -29,6 +30,8 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
     app.include_router(health.router)
     routers = (
+        auth.router,
+        auth.users_router,
         brands.router,
         brands.admin_router,
         categories.router,

@@ -3,11 +3,16 @@ from http import HTTPStatus
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from redis.exceptions import RedisError
 from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException
 import structlog
 
-from ecommerce.core.exceptions.base import AppError, ValidationFailedError
+from ecommerce.core.exceptions.base import (
+    AppError,
+    ServiceUnavailableError,
+    ValidationFailedError,
+)
 from ecommerce.core.exceptions.db import map_integrity_error
 from ecommerce.core.observability.logging import log
 
@@ -35,7 +40,9 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
         log.error("app.error", title=exc.title, detail=exc.detail, exc_info=exc)
     else:
         log.warning("app.error", title=exc.title, detail=exc.detail)
-    return problem(request, exc.status_code, exc.title, exc.detail, **exc.extra)
+    response = problem(request, exc.status_code, exc.title, exc.detail, **exc.extra)
+    response.headers.update(exc.headers)
+    return response
 
 
 async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSONResponse:
@@ -45,6 +52,12 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
         log.error("db.integrity_error", exc_info=exc)
         return problem(request, error.status_code, error.title, error.detail)
     return await app_error_handler(request, error)
+
+
+async def redis_error_handler(request: Request, exc: RedisError) -> JSONResponse:
+    log.error("redis.error", exc_info=exc)
+    error = ServiceUnavailableError()
+    return problem(request, error.status_code, error.title, error.detail)
 
 
 async def http_error_handler(request: Request, exc: HTTPException) -> JSONResponse:
@@ -75,5 +88,6 @@ async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResp
 def register_exception_handlers(app: FastAPI) -> None:
     app.exception_handler(AppError)(app_error_handler)
     app.exception_handler(IntegrityError)(integrity_error_handler)
+    app.exception_handler(RedisError)(redis_error_handler)
     app.exception_handler(HTTPException)(http_error_handler)
     app.exception_handler(RequestValidationError)(validation_error_handler)
