@@ -17,7 +17,7 @@ revision:
 	uv run alembic revision --autogenerate -m "$(m)"
 
 admin:
-	uv run python -m ecommerce.cli create-admin $(email)
+	uv run python -m ecommerce.cli create-admin "$(email)"
 
 run:
 	uv run fastapi dev src/ecommerce/main.py
