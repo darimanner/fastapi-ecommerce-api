@@ -1,11 +1,12 @@
+from datetime import UTC, datetime
 from uuid import UUID, uuid7
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ecommerce.modules.auth.models import User
 from ecommerce.modules.brands.models import Brand
-from ecommerce.modules.cart.models import Cart
+from ecommerce.modules.cart.models import Cart, CartItem
 from ecommerce.modules.cart.repository import CartRepository
 from ecommerce.modules.categories.models import Category
 from ecommerce.modules.products.models import Product, ProductVariant
@@ -72,6 +73,24 @@ async def test_add_quantity_accumulates(db_session: AsyncSession) -> None:
 
     assert await repo.add_quantity(cart_id, variant.id, 2) == 2
     assert await repo.add_quantity(cart_id, variant.id, 3) == 5
+
+
+async def test_re_adding_a_line_bumps_updated_at(db_session: AsyncSession) -> None:
+    repo = CartRepository(db_session)
+    cart_id = await repo.ensure(await _user(db_session))
+    variant = await _variant(db_session)
+    await repo.add_quantity(cart_id, variant.id, 1)
+    # now() is constant inside the test transaction, so age the row explicitly.
+    old = datetime(2020, 1, 1, tzinfo=UTC)
+    await db_session.execute(update(CartItem).values(updated_at=old))
+
+    await repo.add_quantity(cart_id, variant.id, 1)
+
+    stamp = await db_session.scalar(
+        select(CartItem.updated_at).where(CartItem.cart_id == cart_id)
+    )
+    assert stamp is not None
+    assert stamp > old
 
 
 async def test_set_quantity(db_session: AsyncSession) -> None:

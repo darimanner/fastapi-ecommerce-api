@@ -9,6 +9,7 @@ from sqlalchemy import (
     Uuid,
     column,
     delete,
+    func,
     select,
     table,
     update,
@@ -67,7 +68,11 @@ class CartRepository(SQLAlchemyRepository[Cart]):
         )
         stmt = new.on_conflict_do_update(
             index_elements=["cart_id", "variant_id"],
-            set_={"quantity": CartItem.quantity + new.excluded.quantity},
+            # The mixin's onupdate does not apply to ON CONFLICT DO UPDATE.
+            set_={
+                "quantity": CartItem.quantity + new.excluded.quantity,
+                "updated_at": func.now(),
+            },
         ).returning(CartItem.quantity)
         return (await self.session.execute(stmt)).scalar_one()
 
