@@ -12,6 +12,7 @@ from ecommerce.core.observability.middleware import request_context
 from ecommerce.core.redis import redis_client
 from ecommerce.modules.auth import router as auth
 from ecommerce.modules.brands import router as brands
+from ecommerce.modules.cart import router as cart
 from ecommerce.modules.categories import router as categories
 from ecommerce.modules.products import router as products
 
@@ -34,6 +35,7 @@ def create_app() -> FastAPI:
         auth.users_router,
         brands.router,
         brands.admin_router,
+        cart.router,
         categories.router,
         categories.admin_router,
         products.router,
