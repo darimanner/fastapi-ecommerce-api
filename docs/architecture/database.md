@@ -37,6 +37,13 @@ Money is an `int` in minor units (cents) of the one store currency, never `float
 
 The public listing (`ProductRepository.list_public`) joins each product to a `LATERAL` `min(price)` over its variants that match the option filter (served by the `(product_id, options)` index), so the price filters and sorts apply to the lowest matching price, and a `newest` page prices only the rows it reads instead of aggregating the whole variants table. Prices and stock are capped at the `INTEGER` range in the schemas, so an oversized value is a 422, not a database error. The category filter walks the subtree with a recursive CTE over a bare `table("categories", ...)`, so the products module never imports the categories module.
 
+## Cart Tables
+
+- `carts`: one row per user, `user_id` unique and `ON DELETE CASCADE`. `CartRepository.ensure` creates it with a single `INSERT ... ON CONFLICT DO UPDATE ... RETURNING id`, so concurrent first requests share one row.
+- `cart_items`: `UNIQUE (cart_id, variant_id)` and `CHECK (quantity > 0)`; `cart_id` and `variant_id` are `ON DELETE CASCADE` (the `variant_id` index serves the cascade), so a deleted variant drops out of carts. Adding is an upsert that increments the quantity, so concurrent adds never lose an update.
+
+A line holds no price: the cart reads the variant's current price and stock on every request. Stock is checked softly (a resulting quantity above stock is a 409) and nothing is reserved; snapshots and reservation belong to checkout, which is not built yet.
+
 ## Mixins
 
 All live in `src/ecommerce/core/db/mixins/` and are applied as needed.
