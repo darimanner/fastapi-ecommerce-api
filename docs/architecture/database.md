@@ -2,7 +2,7 @@
 
 > Status: partially implemented
 
-Implemented: `Base` with the naming convention, sessions, `TimestampMixin`, `UUIDPrimaryKeyMixin`, the generic repository, Unit of Work, pagination, database error mapping, the category tree queries and the product listing query. Planned: the soft delete, audit and versioned mixins.
+Implemented: `Base` with the naming convention, sessions, `TimestampMixin`, `UUIDPrimaryKeyMixin`, the generic repository, Unit of Work, pagination, database error mapping, the category tree queries, the product listing query, and the cart tables with their upserts (one cart per user, one line per variant). Planned: the soft delete, audit and versioned mixins.
 
 ## Base & Naming Convention
 
