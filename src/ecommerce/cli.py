@@ -18,8 +18,6 @@ from ecommerce.uow import AppUnitOfWork
 app = typer.Typer(add_completion=False, pretty_exceptions_enable=False)
 
 
-# The callback keeps create-admin a subcommand: with a single command and no
-# callback, Typer would run it as the root command.
 @app.callback()
 def _commands() -> None:
     """Management commands."""
@@ -55,7 +53,6 @@ def create_admin_command(email: str) -> None:
     if password is None:
         password = typer.prompt("Password", hide_input=True, confirmation_prompt=True)
     try:
-        # Validate up front so bad input exits 2 before any connection is opened.
         RegisterRequest(email=email, password=password)
     except ValidationError as exc:
         # Never format the exception itself: it echoes input_value, i.e. the password.
