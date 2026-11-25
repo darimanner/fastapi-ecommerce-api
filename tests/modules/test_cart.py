@@ -69,9 +69,9 @@ async def test_add_accumulates_into_one_line(
     cart = await add(client, shoe["id"], 2)
 
     (line,) = cart["items"]
-    assert line | {"product_id": None} == {
+    assert line == {
         "variant_id": shoe["id"],
-        "product_id": None,
+        "product_id": shoe["product"]["id"],
         "name": "Trail Runner",
         "sku": "TR-42",
         "options": {"size": "42"},
@@ -96,7 +96,7 @@ async def test_patch_sets_quantity(
 
 
 async def test_delete_line_and_clear(
-    client: AsyncClient, product: Json, shoe: Json, customer: UUID
+    client: AsyncClient, shoe: Json, customer: UUID
 ) -> None:
     await add(client, shoe["id"])
 
@@ -228,20 +228,22 @@ async def test_users_do_not_see_each_other(
     client: AsyncClient, shoe: Json, customer: UUID
 ) -> None:
     await add(client, shoe["id"])
-    other = UUID(int=1)
+    body = {"email": f"{uuid7()}@example.com", "password": "correct horse"}
+    other = UUID((await client.post("/api/v1/auth/register", json=body)).json()["id"])
     act_as(client, other, "customer")
 
     assert (await client.get(CART)).json()["items"] == []
+    await add(client, shoe["id"], 2)
     assert (await client.delete(f"{ITEMS}/{shoe['id']}")).status_code == 204
+    await add(client, shoe["id"], 2)
     assert (await client.delete(CART)).status_code == 204
+    assert (await client.get(CART)).json()["items"] == []
 
     act_as(client, customer, "customer")
     assert (await client.get(CART)).json()["items"][0]["quantity"] == 1
 
 
-async def test_token_of_a_deleted_user_is_422(
-    client: AsyncClient, shoe: Json, db_session: AsyncSession
-) -> None:
+async def test_token_of_a_deleted_user_is_422(client: AsyncClient, shoe: Json) -> None:
     act_as(client, uuid7(), "customer")
 
     response = await client.post(ITEMS, json={"variant_id": shoe["id"]})
