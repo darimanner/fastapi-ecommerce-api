@@ -20,7 +20,7 @@ Work in progress. The v1 scope:
 
 | Area | Tools |
 | --- | --- |
-| API | FastAPI, Pydantic v2 |
+| API | FastAPI, Pydantic v2; Typer (management CLI) |
 | Database | PostgreSQL, SQLAlchemy 2 (async, asyncpg), Alembic |
 | Background jobs and cache | Redis (count cache, refresh tokens); Taskiq (planned) |
 | Observability | structlog; OpenTelemetry, Prometheus, Grafana (planned) |

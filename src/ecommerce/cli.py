@@ -1,12 +1,9 @@
-import argparse
 import asyncio
-from collections.abc import Sequence
-import getpass
 import os
-import sys
 
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
+import typer
 
 from ecommerce.core.db.sessions import engine, session_factory
 from ecommerce.core.exceptions.base import ConflictError
@@ -16,6 +13,14 @@ from ecommerce.modules.auth.models import Role, User
 from ecommerce.modules.auth.schemas import RegisterRequest
 from ecommerce.modules.auth.service import AuthService
 from ecommerce.uow import AppUnitOfWork
+
+# Plain tracebacks: rich ones can print frame locals, i.e. the password.
+app = typer.Typer(add_completion=False, pretty_exceptions_enable=False)
+
+
+@app.callback()
+def _commands() -> None:
+    """Management commands."""
 
 
 async def create_admin(uow: AppUnitOfWork, email: str, password: str) -> User:
@@ -36,47 +41,34 @@ async def _create_and_dispose(email: str, password: str) -> None:
         await engine.dispose()
 
 
-def _read_password() -> str:
+@app.command("create-admin")
+def create_admin_command(email: str) -> None:
+    """Create a user with the admin role.
+
+    The password is read from ADMIN_PASSWORD, otherwise asked for twice.
+    """
+    # Not a --password option: a password on the command line lands in shell
+    # history and the process list.
     password = os.environ.get("ADMIN_PASSWORD")
-    if password is not None:
-        return password
-    password = getpass.getpass("Password: ")
-    if getpass.getpass("Repeat password: ") != password:
-        raise ValueError("Passwords do not match")
-    return password
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="ecommerce.cli")
-    commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser(
-        "create-admin", help="create a user with the admin role"
-    ).add_argument("email")
-    args = parser.parse_args(argv)
-
+    if password is None:
+        password = typer.prompt("Password", hide_input=True, confirmation_prompt=True)
     try:
-        password = _read_password()
-        # Validate up front so bad input exits 2 before any connection is opened.
-        RegisterRequest(email=args.email, password=password)
+        RegisterRequest(email=email, password=password)
     except ValidationError as exc:
         # Never format the exception itself: it echoes input_value, i.e. the password.
         reasons = "; ".join(
             f"{err['loc'][-1]}: {err['msg']}"
             for err in exc.errors(include_input=False, include_url=False)
         )
-        sys.stderr.write(f"Invalid input: {reasons}\n")
-        return 2
-    except ValueError as exc:
-        sys.stderr.write(f"Invalid input: {exc}\n")
-        return 2
+        typer.echo(f"Invalid input: {reasons}", err=True)
+        raise typer.Exit(2) from None
     try:
-        asyncio.run(_create_and_dispose(args.email, password))
+        asyncio.run(_create_and_dispose(email, password))
     except ConflictError as exc:
-        sys.stderr.write(f"{exc.detail}\n")
-        return 1
-    sys.stdout.write(f"Admin {args.email.lower()} created\n")
-    return 0
+        typer.echo(exc.detail, err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"Admin {email.lower()} created")
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    app()
