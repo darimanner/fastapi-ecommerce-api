@@ -1,5 +1,5 @@
 from datetime import timedelta
-from uuid import uuid7
+from uuid import UUID, uuid7
 
 from httpx import AsyncClient
 import pytest
@@ -12,6 +12,15 @@ from tests.modules.catalog import Json, post
 def admin(client: AsyncClient) -> None:
     token = issue_token(uuid7(), "access", timedelta(minutes=5), role="admin")
     client.headers["Authorization"] = f"Bearer {token.value}"
+
+
+@pytest.fixture
+async def customer(client: AsyncClient) -> UUID:
+    body = {"email": f"{uuid7()}@example.com", "password": "correct horse"}
+    user_id = UUID((await client.post("/api/v1/auth/register", json=body)).json()["id"])
+    token = issue_token(user_id, "access", timedelta(minutes=5), role="customer")
+    client.headers["Authorization"] = f"Bearer {token.value}"
+    return user_id
 
 
 @pytest.fixture

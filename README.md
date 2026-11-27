@@ -11,7 +11,8 @@ Work in progress. The v1 scope:
 
 - Catalog (done): category tree with cycle and depth checks, brands, products with variants (SKU, price, stock, options), a public listing with filters, keyset pages and totals from a Redis count cache
 - Accounts (done): registration, login, refresh token rotation, `/users/me`, and role-based permissions on the admin write routes; the first admin is created with `make admin`
-- Cart and checkout with stock reservation in one transaction
+- Cart (done): one cart per customer with a soft stock check; lines show the current price and an `available` flag
+- Checkout with stock reservation in one transaction
 - Order lifecycle with a state machine and automatic expiry of unpaid reservations
 - Rate limiting with a sliding window in Redis
 - Observability: structured logs, traces and metrics with OpenTelemetry, Prometheus, Tempo, Loki and Grafana

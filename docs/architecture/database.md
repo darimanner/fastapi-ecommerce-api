@@ -2,7 +2,7 @@
 
 > Status: partially implemented
 
-Implemented: `Base` with the naming convention, sessions, `TimestampMixin`, `UUIDPrimaryKeyMixin`, the generic repository, Unit of Work, pagination, database error mapping, the category tree queries and the product listing query. Planned: the soft delete, audit and versioned mixins.
+Implemented: `Base` with the naming convention, sessions, `TimestampMixin`, `UUIDPrimaryKeyMixin`, the generic repository, Unit of Work, pagination, database error mapping, the category tree queries, the product listing query, and the cart tables with their upserts (one cart per user, one line per variant). Planned: the soft delete, audit and versioned mixins.
 
 ## Base & Naming Convention
 
@@ -36,6 +36,13 @@ Money is an `int` in minor units (cents) of the one store currency, never `float
 - `product_variants`: `sku` unique, `price` and `stock` with `CHECK >= 0`, `options` JSONB (`{"size": "M"}`) with `UNIQUE (product_id, options)` and a GIN index for `@>` filters, see [ADR-0005](../adr/0005-variant-options-jsonb.md). `product_id` is `ON DELETE CASCADE`: variants are part of the product.
 
 The public listing (`ProductRepository.list_public`) joins each product to a `LATERAL` `min(price)` over its variants that match the option filter (served by the `(product_id, options)` index), so the price filters and sorts apply to the lowest matching price, and a `newest` page prices only the rows it reads instead of aggregating the whole variants table. Prices and stock are capped at the `INTEGER` range in the schemas, so an oversized value is a 422, not a database error. The category filter walks the subtree with a recursive CTE over a bare `table("categories", ...)`, so the products module never imports the categories module.
+
+## Cart Tables
+
+- `carts`: one row per user, `user_id` unique and `ON DELETE CASCADE`. `CartRepository.ensure` creates it with a single `INSERT ... ON CONFLICT DO UPDATE ... RETURNING id`, so concurrent first requests share one row.
+- `cart_items`: `UNIQUE (cart_id, variant_id)` and `CHECK (quantity > 0)`; `cart_id` and `variant_id` are `ON DELETE CASCADE` (the `variant_id` index serves the cascade), so a deleted variant drops out of carts. Adding is an upsert that increments the quantity, so concurrent adds never lose an update.
+
+A line holds no price: the cart reads the variant's current price and stock on every request. Stock is checked softly (a resulting quantity above stock is a 409) and nothing is reserved; snapshots and reservation belong to checkout, which is not built yet.
 
 ## Mixins
 

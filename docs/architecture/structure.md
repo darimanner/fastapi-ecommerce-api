@@ -2,7 +2,7 @@
 
 > Status: partially implemented
 
-Implemented today under `src/ecommerce/`: `config/settings.py`, `main.py`, `api/health.py`, `core/db/` (`model.py`, `sessions.py`, `mixins/timestamp.py`, `mixins/uuid_pk.py`), `core/exceptions/` (`base.py`, `handlers.py`, `db.py`), `core/pagination/`, `core/observability/` (`logging.py`, `middleware.py`), `core/crud.py`, `core/slug.py`, `core/redis.py`, `core/counts.py`, `core/security/` (`tokens.py`, `passwords.py`), `interfaces/` (`repository.py`, `unit_of_work.py`), `infrastructure/` (`repository.py`, `unit_of_work.py`), `uow.py`, `cache.py`, `cli.py`, and the `auth`, `brands`, `categories` and `products` modules. The rest of the tree is the target layout.
+Implemented today under `src/ecommerce/`: `config/settings.py`, `main.py`, `api/health.py`, `core/db/` (`model.py`, `sessions.py`, `mixins/timestamp.py`, `mixins/uuid_pk.py`), `core/exceptions/` (`base.py`, `handlers.py`, `db.py`), `core/pagination/`, `core/observability/` (`logging.py`, `middleware.py`), `core/crud.py`, `core/slug.py`, `core/redis.py`, `core/counts.py`, `core/security/` (`tokens.py`, `passwords.py`), `interfaces/` (`repository.py`, `unit_of_work.py`), `infrastructure/` (`repository.py`, `unit_of_work.py`), `uow.py`, `cache.py`, `cli.py`, and the `auth`, `brands`, `categories`, `products` and `cart` modules. The rest of the tree is the target layout.
 
 The approach is a **modular monolith**: each domain lives in its own folder and is self-contained. This improves cohesion, makes it easier to extract a module into a separate service later, and keeps feature work local.
 
@@ -75,6 +75,7 @@ src/ecommerce/
     ├── brands/
     ├── categories/
     ├── products/
+    ├── cart/
     └── orders/
 ```
 

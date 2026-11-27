@@ -80,12 +80,13 @@ A user has a role, roles have permissions, and the permissions are resolved on t
 # src/ecommerce/modules/auth/permissions.py
 class Permission(StrEnum):
     BRANDS_WRITE = "brands:write"
+    CART_MANAGE = "cart:manage"
     CATEGORIES_WRITE = "categories:write"
     PRODUCTS_WRITE = "products:write"
 
 
 ROLE_PERMISSIONS: Mapping[Role, frozenset[Permission]] = {
-    Role.CUSTOMER: frozenset(),
+    Role.CUSTOMER: frozenset({Permission.CART_MANAGE}),
     Role.ADMIN: frozenset(Permission),
 }
 
@@ -111,7 +112,7 @@ admin_router = APIRouter(
 )
 ```
 
-The dependency sits on the router, so every write route of the module is covered, including the variant routes of the products `admin_router`. Public `router`s have no dependency.
+The dependency sits on the router, so every write route of the module is covered, including the variant routes of the products `admin_router`. Public `router`s have no dependency. The cart router carries `cart:manage` (granted to `customer`) and every route acts on the caller's own cart: there is no cart id in any URL.
 
 - 401: no token, or an expired, malformed or foreign one (`WWW-Authenticate: Bearer`).
 - 403: a valid token whose role lacks a permission; the problem body lists the missing ones in `missing`.
